@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-03T17:49:32.8021534-07:00",
+  "title": "Design System: Chess Harness v2",
+  "extensions": {
+    "colorMeta": {
+      "desk-backdrop": {
+        "role": "neutral",
+        "displayName": "Desk Backdrop",
+        "tonalRamp": ["oklch(15% 0.007 160.1)", "oklch(27% 0.007 160.1)", "oklch(39% 0.007 160.1)", "oklch(51% 0.007 160.1)", "oklch(63% 0.007 160.1)", "oklch(75% 0.007 160.1)", "oklch(86% 0.007 160.1)", "oklch(95% 0.007 160.1)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Graphite Ink",
+        "tonalRamp": ["oklch(15% 0.017 170.7)", "oklch(27% 0.017 170.7)", "oklch(39% 0.017 170.7)", "oklch(51% 0.017 170.7)", "oklch(63% 0.017 170.7)", "oklch(75% 0.017 170.7)", "oklch(86% 0.017 170.7)", "oklch(95% 0.017 170.7)"]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Muted Graphite",
+        "tonalRamp": ["oklch(15% 0.020 167.8)", "oklch(27% 0.020 167.8)", "oklch(39% 0.020 167.8)", "oklch(51% 0.020 167.8)", "oklch(63% 0.020 167.8)", "oklch(75% 0.020 167.8)", "oklch(86% 0.020 167.8)", "oklch(95% 0.020 167.8)"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Vellum",
+        "tonalRamp": ["oklch(15% 0.014 88.7)", "oklch(27% 0.014 88.7)", "oklch(39% 0.014 88.7)", "oklch(51% 0.014 88.7)", "oklch(63% 0.014 88.7)", "oklch(75% 0.014 88.7)", "oklch(86% 0.014 88.7)", "oklch(95% 0.014 88.7)"]
+      },
+      "paper-deep": {
+        "role": "neutral",
+        "displayName": "Deep Vellum",
+        "tonalRamp": ["oklch(15% 0.021 88.7)", "oklch(27% 0.021 88.7)", "oklch(39% 0.021 88.7)", "oklch(51% 0.021 88.7)", "oklch(63% 0.021 88.7)", "oklch(75% 0.021 88.7)", "oklch(86% 0.021 88.7)", "oklch(95% 0.021 88.7)"]
+      },
+      "green": {
+        "role": "primary",
+        "displayName": "Tournament Green",
+        "tonalRamp": ["oklch(15% 0.050 171.8)", "oklch(27% 0.050 171.8)", "oklch(39% 0.050 171.8)", "oklch(51% 0.050 171.8)", "oklch(63% 0.050 171.8)", "oklch(75% 0.050 171.8)", "oklch(86% 0.050 171.8)", "oklch(95% 0.050 171.8)"]
+      },
+      "green-raised": {
+        "role": "primary",
+        "displayName": "Raised Tournament Green",
+        "tonalRamp": ["oklch(15% 0.062 172.8)", "oklch(27% 0.062 172.8)", "oklch(39% 0.062 172.8)", "oklch(51% 0.062 172.8)", "oklch(63% 0.062 172.8)", "oklch(75% 0.062 172.8)", "oklch(86% 0.062 172.8)", "oklch(95% 0.062 172.8)"]
+      },
+      "green-wash": {
+        "role": "primary",
+        "displayName": "Tournament Wash",
+        "tonalRamp": ["oklch(15% 0.018 155.8)", "oklch(27% 0.018 155.8)", "oklch(39% 0.018 155.8)", "oklch(51% 0.018 155.8)", "oklch(63% 0.018 155.8)", "oklch(75% 0.018 155.8)", "oklch(86% 0.018 155.8)", "oklch(95% 0.018 155.8)"]
+      },
+      "rust": {
+        "role": "secondary",
+        "displayName": "Rust Registration",
+        "tonalRamp": ["oklch(15% 0.133 31.4)", "oklch(27% 0.133 31.4)", "oklch(39% 0.133 31.4)", "oklch(51% 0.133 31.4)", "oklch(63% 0.133 31.4)", "oklch(75% 0.133 31.4)", "oklch(86% 0.133 31.4)", "oklch(95% 0.133 31.4)"]
+      },
+      "rust-deep": {
+        "role": "secondary",
+        "displayName": "Deep Rust",
+        "tonalRamp": ["oklch(15% 0.112 30.4)", "oklch(27% 0.112 30.4)", "oklch(39% 0.112 30.4)", "oklch(51% 0.112 30.4)", "oklch(63% 0.112 30.4)", "oklch(75% 0.112 30.4)", "oklch(86% 0.112 30.4)", "oklch(95% 0.112 30.4)"]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Graphite Rule",
+        "tonalRamp": ["oklch(15% 0.012 141.3)", "oklch(27% 0.012 141.3)", "oklch(39% 0.012 141.3)", "oklch(51% 0.012 141.3)", "oklch(63% 0.012 141.3)", "oklch(75% 0.012 141.3)", "oklch(86% 0.012 141.3)", "oklch(95% 0.012 141.3)"]
+      },
+      "rule-dark": {
+        "role": "neutral",
+        "displayName": "Dark Graphite Rule",
+        "tonalRamp": ["oklch(15% 0.016 162.1)", "oklch(27% 0.016 162.1)", "oklch(39% 0.016 162.1)", "oklch(51% 0.016 162.1)", "oklch(63% 0.016 162.1)", "oklch(75% 0.016 162.1)", "oklch(86% 0.016 162.1)", "oklch(95% 0.016 162.1)"]
+      },
+      "white-square": {
+        "role": "tertiary",
+        "displayName": "Light Ledger Square",
+        "tonalRamp": ["oklch(15% 0.036 85.4)", "oklch(27% 0.036 85.4)", "oklch(39% 0.036 85.4)", "oklch(51% 0.036 85.4)", "oklch(63% 0.036 85.4)", "oklch(75% 0.036 85.4)", "oklch(86% 0.036 85.4)", "oklch(95% 0.036 85.4)"]
+      },
+      "black-square": {
+        "role": "tertiary",
+        "displayName": "Dark Ledger Square",
+        "tonalRamp": ["oklch(15% 0.044 166.7)", "oklch(27% 0.044 166.7)", "oklch(39% 0.044 166.7)", "oklch(51% 0.044 166.7)", "oklch(63% 0.044 166.7)", "oklch(75% 0.044 166.7)", "oklch(86% 0.044 166.7)", "oklch(95% 0.044 166.7)"]
+      },
+      "focus": {
+        "role": "tertiary",
+        "displayName": "Focus Blue",
+        "tonalRamp": ["oklch(15% 0.123 245.5)", "oklch(27% 0.123 245.5)", "oklch(39% 0.123 245.5)", "oklch(51% 0.123 245.5)", "oklch(63% 0.123 245.5)", "oklch(75% 0.123 245.5)", "oklch(86% 0.123 245.5)", "oklch(95% 0.123 245.5)"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Ledger Headline",
+        "purpose": "Section and match titles that anchor dense evidence regions."
+      },
+      "title": {
+        "displayName": "Compact Title",
+        "purpose": "Identity-level titles such as the small brand wordmark."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Readable event summaries, field content, and explanatory copy."
+      },
+      "label": {
+        "displayName": "Arbiter Label",
+        "purpose": "Uppercase field labels, replay labels, and docket annotations."
+      },
+      "data": {
+        "displayName": "Evidence Data",
+        "purpose": "Tabular versions, plies, clocks, record ids, counts, and trace phases."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sticky-authority",
+        "value": "0 10px 30px rgb(24 39 33 / 18%)",
+        "purpose": "Keeps the sticky tournament-green header distinct from content moving beneath it."
+      },
+      {
+        "name": "board-object",
+        "value": "0 16px 28px rgb(35 48 42 / 22%)",
+        "purpose": "Gives the physical chessboard the interface's sole substantial lift."
+      },
+      {
+        "name": "live-signal",
+        "value": "0 2px 8px rgb(151 196 164 / 55%)",
+        "purpose": "Provides a compact glow for the local live environment indicator."
+      }
+    ],
+    "motion": [
+      {
+        "name": "live-radio-sweep",
+        "value": "1.8s cubic-bezier(0.16, 1, 0.3, 1) infinite",
+        "purpose": "A restrained pulse on the running status icon; suppressed by the reduced-motion media query."
+      }
+    ],
+    "breakpoints": [
+      { "name": "desk-compact", "value": "1180px" },
+      { "name": "stacked-workspace", "value": "900px" },
+      { "name": "narrow-ledger", "value": "620px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Match Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Starts the selected backend-authored match from the docket.",
+      "html": "<button class=\"ds-button-primary\" type=\"button\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8 5v14l11-7z\"/></svg>Start mock match</button>",
+      "css": ".ds-button-primary { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:0 14px; border:0; border-radius:8px; color:#fffdf7; background:var(--green, #244c40); font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); font-size:12px; font-weight:800; cursor:pointer; } .ds-button-primary svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linejoin:round; } .ds-button-primary:hover { background:var(--green-raised, #316657); } .ds-button-primary:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:2px; } .ds-button-primary:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Stop Active Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "The compact destructive action that sits beside live match status.",
+      "html": "<button class=\"ds-button-stop\" type=\"button\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><rect x=\"9\" y=\"9\" width=\"6\" height=\"6\" rx=\"1\"/></svg>Stop active</button>",
+      "css": ".ds-button-stop { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:32px; padding:0 9px; border:0; border-radius:7px; color:var(--rust-deep, #7e2f24); background:#ead4cc; font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); font-size:10px; font-weight:800; cursor:pointer; } .ds-button-stop svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; } .ds-button-stop:hover { color:#fff9f5; background:var(--rust, #a34131); } .ds-button-stop:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:2px; } .ds-button-stop:active { transform:translateY(1px); }"
+    },
+    {
+      "name": "Harness Select",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Selects a versioned harness while keeping version identity visible.",
+      "html": "<label class=\"ds-field\"><span>White harness</span><select><option>Agent Player 1 · v1.0</option><option>Agent Player 1 Graph · v0.1</option></select></label>",
+      "css": ".ds-field { display:grid; gap:7px; min-width:220px; color:var(--ink-soft, #53615b); font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; } .ds-field select { width:100%; min-height:42px; padding:0 34px 0 11px; border:1px solid var(--rule-dark, #68736d); border-radius:8px; color:var(--ink, #1c2723); background:#fffdf7; font-family:\"Segoe UI Variable\", Aptos, sans-serif; font-size:13px; font-weight:650; text-transform:none; cursor:pointer; } .ds-field select:hover { border-color:var(--green, #244c40); } .ds-field select:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:2px; }"
+    },
+    {
+      "name": "Running Status Badge",
+      "kind": "chip",
+      "refersTo": "status-running",
+      "description": "Pairs a live radio glyph with explicit running text.",
+      "html": "<span class=\"ds-status-running\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"2\"/><path d=\"M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2\"/></svg>Running</span>",
+      "css": ".ds-status-running { display:inline-flex; align-items:center; gap:5px; padding:5px 9px; border-radius:999px; color:#174434; background:#cae4d4; font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); font-size:10px; font-weight:850; letter-spacing:.05em; text-transform:uppercase; } .ds-status-running svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; } .ds-status-running:hover { background:color-mix(in srgb, #cae4d4 78%, var(--green, #244c40)); } .ds-status-running:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:2px; }"
+    },
+    {
+      "name": "Ledger Surface",
+      "kind": "card",
+      "refersTo": "ledger-surface",
+      "description": "The ruled vellum container used for dockets, status, traces, and records.",
+      "html": "<article class=\"ds-ledger-surface\"><span>Match docket</span><h3>Backend-authored record</h3><p>Position, notation, and causal trace stay in one evidence system.</p></article>",
+      "css": ".ds-ledger-surface { max-width:360px; padding:16px; border:1px solid var(--rule, #a8aea7); border-radius:12px; color:var(--ink, #1c2723); background:var(--paper, #f5f1e7); } .ds-ledger-surface > span { color:var(--green, #244c40); font-family:ui-monospace, \"Cascadia Mono\", Consolas, monospace; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; } .ds-ledger-surface h3 { margin:7px 0 0; font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); font-size:19px; line-height:1.2; letter-spacing:-.025em; } .ds-ledger-surface p { margin:7px 0 0; color:var(--ink-soft, #53615b); font-size:12px; line-height:1.45; } .ds-ledger-surface:hover { border-color:var(--rule-dark, #68736d); } .ds-ledger-surface:focus-within { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:2px; }"
+    },
+    {
+      "name": "Replay Cursor",
+      "kind": "custom",
+      "refersTo": "registration-mark",
+      "description": "The rust registration diamond that synchronizes the active ply across the record.",
+      "html": "<label class=\"ds-replay\"><span>Replay cursor</span><input type=\"range\" min=\"0\" max=\"8\" value=\"6\"/><output>6/8</output></label>",
+      "css": ".ds-replay { display:grid; grid-template-columns:auto minmax(140px, 1fr) auto; gap:10px; align-items:center; min-width:320px; color:var(--ink-soft, #53615b); font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; } .ds-replay input { width:100%; height:4px; border-radius:0; appearance:none; accent-color:var(--rust, #a34131); background:#aeb5b0; cursor:pointer; } .ds-replay input::-webkit-slider-thumb { width:14px; height:14px; border:0; border-radius:2px; appearance:none; background:var(--rust, #a34131); transform:rotate(45deg); } .ds-replay input::-moz-range-thumb { width:14px; height:14px; border:0; border-radius:2px; background:var(--rust, #a34131); transform:rotate(45deg); } .ds-replay input:hover { background:var(--rule-dark, #68736d); } .ds-replay input:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:5px; } .ds-replay output { min-width:42px; font-family:ui-monospace, \"Cascadia Mono\", Consolas, monospace; font-weight:400; text-align:right; letter-spacing:0; }"
+    },
+    {
+      "name": "Active Decision Trace Event",
+      "kind": "custom",
+      "refersTo": "trace-active",
+      "description": "A ruled trace row whose active marker shares the replay registration geometry.",
+      "html": "<button class=\"ds-trace-event\" type=\"button\"><span class=\"ds-trace-marker\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"3\"/><circle cx=\"12\" cy=\"12\" r=\"8\"/></svg></span><span class=\"ds-trace-copy\"><span>PLY 8 · BLACK · VERIFY</span><strong>Verify · Nf6</strong><small>Confirmed the authoritative position returned by the game service.</small></span></button>",
+      "css": ".ds-trace-event { display:grid; grid-template-columns:34px minmax(0, 1fr); gap:7px; width:100%; max-width:500px; padding:13px 15px; border:0; border-bottom:1px solid #d4d0c4; color:var(--ink, #1c2723); background:var(--green-wash, #dbe8df); text-align:left; cursor:pointer; } .ds-trace-event:hover { background:#cfded5; } .ds-trace-event:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:-3px; } .ds-trace-marker { display:grid; width:20px; height:20px; margin-top:1px; border:1px solid var(--rust-deep, #7e2f24); border-radius:2px; place-items:center; color:#fffdf7; background:var(--rust, #a34131); transform:rotate(45deg); } .ds-trace-marker svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; transform:rotate(-45deg); } .ds-trace-copy { display:grid; gap:5px; } .ds-trace-copy > span { color:var(--green, #244c40); font-family:ui-monospace, \"Cascadia Mono\", Consolas, monospace; font-size:9px; font-weight:800; letter-spacing:.04em; } .ds-trace-copy strong { font-size:13px; line-height:1.3; } .ds-trace-copy small { color:var(--ink-soft, #53615b); font-size:12px; line-height:1.45; }"
+    },
+    {
+      "name": "Selected History Record",
+      "kind": "custom",
+      "refersTo": "trace-active",
+      "description": "A selected match ledger row with tabular identity and an explicit result chip.",
+      "html": "<button class=\"ds-history-row\" type=\"button\"><span class=\"ds-history-id\">match-live-001</span><span class=\"ds-history-players\"><strong>Agent Player 1 Graph <small>v0.1</small></strong><em>vs</em><strong>Agent Player 1 <small>v1.0</small></strong></span><span class=\"ds-history-result\">running</span><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></button>",
+      "css": ".ds-history-row { display:grid; grid-template-columns:minmax(120px, .8fr) minmax(260px, 2fr) auto 20px; gap:18px; align-items:center; width:100%; min-height:58px; padding:10px 16px; border:0; border-bottom:1px solid #d4d0c4; color:var(--ink, #1c2723); background:var(--green-wash, #dbe8df); text-align:left; cursor:pointer; } .ds-history-row:hover { background:#cfded5; } .ds-history-row:focus-visible { outline:3px solid color-mix(in srgb, var(--focus, #0a67a3) 65%, white); outline-offset:-3px; } .ds-history-id { color:var(--green, #244c40); font-family:ui-monospace, \"Cascadia Mono\", Consolas, monospace; font-size:10px; font-weight:800; text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; } .ds-history-players { display:grid; grid-template-columns:minmax(0, 1fr) auto minmax(0, 1fr); gap:8px; align-items:baseline; font-size:12px; } .ds-history-players strong { font-family:var(--font-ledger, \"Arial Narrow\", sans-serif); } .ds-history-players small { color:var(--ink-soft, #53615b); font-family:ui-monospace, \"Cascadia Mono\", Consolas, monospace; font-size:9px; } .ds-history-players em { color:var(--ink-soft, #53615b); font-family:Georgia, serif; } .ds-history-result { padding:4px 7px; border-radius:999px; color:#174434; background:#cae4d4; font-family:ui-monospace, \"Cascadia Mono\", Consolas, monospace; font-size:10px; font-weight:800; } .ds-history-row > svg { width:16px; height:16px; fill:none; stroke:var(--green, #244c40); stroke-width:2; }"
+    },
+    {
+      "name": "Changed Board Cell",
+      "kind": "custom",
+      "refersTo": "registration-mark",
+      "description": "A square board cell carrying the same rust registration used by replay and trace.",
+      "html": "<div class=\"ds-board-mini\" role=\"img\" aria-label=\"Board cells with one changed square\"><span></span><span class=\"ds-dark\"></span><span class=\"ds-dark ds-changed\"></span><span></span></div>",
+      "css": ".ds-board-mini { display:grid; grid-template-columns:repeat(2, 64px); overflow:hidden; width:max-content; border:4px solid #34443d; border-radius:4px; box-shadow:0 16px 28px rgb(35 48 42 / 22%); } .ds-board-mini span { position:relative; display:block; width:64px; aspect-ratio:1; background:var(--white-square, #e7dbc2); } .ds-board-mini .ds-dark { background:var(--black-square, #567769); } .ds-board-mini .ds-changed::after { position:absolute; inset:8%; border:3px solid var(--rust, #a34131); content:\"\"; pointer-events:none; } .ds-board-mini:hover .ds-changed::after { border-color:var(--rust-deep, #7e2f24); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Arbiter's Ledger",
+    "overview": "The Arbiter's Ledger treats every position, notation, and causal trace as one signed record. Its visual world is calm but unmistakable: vellum sheets sit on a cool desk, graphite rules turn dense evidence into a readable register, tournament green establishes authority, and rust marks the exact place where attention or intervention is required.\n\nThe system is flat, compact, and documentary rather than game-like. Square board cells, ruled rows, tabular annotations, and restrained type create the feeling of a working tournament desk; tonal shifts carry hierarchy while rare registration marks keep the current ply visible across the record. It explicitly refuses the detached board-plus-generic-dashboard pattern.",
+    "keyCharacteristics": [
+      "Vellum surfaces on a cool neutral desk",
+      "Tournament green authority with rust registration marks",
+      "Graphite rules, square ledger cells, and compact tabular evidence",
+      "Position, notation, and causal trace treated as one synchronized record",
+      "Flat tonal layering with narrowly reserved shadows"
+    ],
+    "rules": [
+      {
+        "name": "The Registration Rule",
+        "body": "Rust is a locating device, not decoration: use it for the active move, an intervention, or a failed state, and keep routine actions green or neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Evidence Hierarchy Rule",
+        "body": "Prose explains; Archivo labels; monospace proves. Do not use decorative type to imitate chess culture.",
+        "section": "typography"
+      },
+      {
+        "name": "The Adjacency Rule",
+        "body": "On investigative surfaces, keep the artifact under inspection and the evidence that explains it adjacent when space permits; when they stack, preserve their causal reading order.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-by-Default Rule",
+        "body": "Use tonal layering and graphite rules for ordinary hierarchy; do not add shadow to routine cards, rows, inputs, or buttons.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Registration Geometry Rule",
+        "body": "A rust diamond means “this exact point in the record”; keep that silhouette consistent across notation, replay, and trace.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do use paper and green washes to separate regions before adding elevation.",
+      "Do keep version identifiers, plies, clocks, and event metadata tabular and compact.",
+      "Do use rust to register the active move, destructive action, or failed state.",
+      "Do preserve a visible focus outline and pair every status color with text.",
+      "Do keep position, notation, and trace synchronized when a replay cursor is present."
+    ],
+    "donts": [
+      "Don't turn the product into a generic card dashboard detached from the chess position.",
+      "Don't add gradients, glass effects, ornamental textures, or casual game styling.",
+      "Don't scatter shadows across routine surfaces; reserve them for the header, board, and live dot.",
+      "Don't use rounded softness everywhere; preserve square cells, ruled rows, and compact controls.",
+      "Don't infer human move controls or editable agent behavior from spectator data."
+    ]
+  }
+}

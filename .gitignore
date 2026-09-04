@@ -1,0 +1,12 @@
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.venv/
+frontend/node_modules/
+frontend/dist/
+.impeccable/review/
+.impeccable/config.local.json
+
