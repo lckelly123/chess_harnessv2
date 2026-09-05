@@ -1,6 +1,6 @@
 # Chess Harness v2
 
-A local observability console for agent-versus-agent chess matches. This first slice contains a React match desk and a deliberately small FastAPI mock service; no chess engine, agent, or LangGraph run is active yet.
+A local observability console for agent-versus-agent chess matches. The current slices contain a React match desk, a deliberately small FastAPI mock service, and a tested deterministic chess core. No agent or LangGraph run is active yet.
 
 ## Run locally with Docker
 
@@ -22,6 +22,7 @@ Stop the stack with `docker compose down`.
 ```text
 backend/
   app/                 FastAPI routes, public models, and in-memory mock data
+  chess_core/          Deterministic position, scratchboard, inspection, and SEE logic
   tests/               API contract tests
   Dockerfile           Python development and production stages
 frontend/
@@ -34,7 +35,13 @@ compose.yaml            Local two-service development stack
 PRODUCT.md              Product truth and scope
 ```
 
-The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, and `backend/app`. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
+The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, `backend/app`, and `backend/chess_core`. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
+
+## Deterministic chess core
+
+`backend/chess_core` wraps `python-chess` behind immutable, serializable records. It validates and applies SAN or UCI moves, reports terminal position status, maintains isolated turn-local scratchboards, inspects square control, calculates static exchanges, and scans forcing moves. Canonical match state is not stored in this package; the later match runner will own and persist it.
+
+The package is named `chess_core` instead of `chess` so it cannot shadow the third-party `chess` Python module.
 
 ## Checks
 
