@@ -13,7 +13,9 @@ from .errors import (
     InvalidSquareError,
 )
 from .models import (
+    CheckEvasion,
     ColorName,
+    CurrentCheck,
     ForcingMove,
     ForcingMoveScan,
     MoveIdentity,
@@ -37,7 +39,9 @@ from .scratch import ScratchBoard
 __all__ = [
     "STARTING_FEN",
     "ChessCoreError",
+    "CheckEvasion",
     "ColorName",
+    "CurrentCheck",
     "ForcingMove",
     "ForcingMoveScan",
     "IllegalMoveError",

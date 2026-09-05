@@ -8,7 +8,9 @@ import chess
 
 from .errors import IllegalMoveError, InvalidSquareError
 from .models import (
+    CheckEvasion,
     ColorName,
+    CurrentCheck,
     ForcingMove,
     ForcingMoveScan,
     MoveIdentity,
@@ -17,7 +19,6 @@ from .models import (
     StaticExchangeResult,
 )
 from .position import _board_from_fen, _color_name, _move_identity, _parse_move
-
 
 _PIECE_VALUES = {
     chess.PAWN: 100,
@@ -65,8 +66,7 @@ def _pieces_targeting(
     square: chess.Square,
 ) -> tuple[PieceInfo, ...]:
     pieces = (
-        _piece_info(board, source)
-        for source in sorted(board.attackers(color, square))
+        _piece_info(board, source) for source in sorted(board.attackers(color, square))
     )
     return tuple(piece for piece in pieces if piece is not None)
 
@@ -252,6 +252,45 @@ def scan_agent_forcing_moves(fen: str) -> ForcingMoveScan:
     return _forcing_scan(_board_from_fen(fen))
 
 
+def _current_check(board: chess.Board) -> CurrentCheck:
+    checkers = tuple(
+        piece
+        for square in sorted(board.checkers())
+        if (piece := _piece_info(board, square)) is not None
+    )
+    evasions = []
+    for move in sorted(board.legal_moves, key=board.san):
+        captured_square = move.to_square
+        if board.is_en_passant(move):
+            captured_square += -8 if board.turn == chess.WHITE else 8
+        captures_checker = (
+            board.is_capture(move) and captured_square in board.checkers()
+        )
+        if board.piece_type_at(move.from_square) == chess.KING:
+            kind = "king_captures_checker" if captures_checker else "king_move"
+        elif captures_checker:
+            kind = "piece_captures_checker"
+        else:
+            kind = "other" if board.is_capture(move) else "interposition"
+        evasions.append(
+            CheckEvasion(
+                move=_move_identity(board, move),
+                evasion_type=kind,
+                static_exchange=_static_exchange_for_move(board, move)
+                if board.is_capture(move)
+                else None,
+            )
+        )
+    return CurrentCheck(
+        check_type={1: "single_check", 2: "double_check"}.get(
+            len(checkers), "multiple_check"
+        ),
+        checking_pieces=checkers,
+        legal_evasions=tuple(evasions),
+        checkmate=board.is_checkmate(),
+    )
+
+
 def scan_opponent_forcing_moves(fen: str) -> ForcingMoveScan:
     """Scan the opponent's hypothetical checks and captures after a pass."""
 
@@ -262,6 +301,7 @@ def scan_opponent_forcing_moves(fen: str) -> ForcingMoveScan:
             status="game_over" if board.is_checkmate() else "in_check",
             actor=opponent,
             reason="checkmate" if board.is_checkmate() else "agent_in_check",
+            current_check=_current_check(board),
         )
     if board.is_game_over(claim_draw=False):
         return ForcingMoveScan(

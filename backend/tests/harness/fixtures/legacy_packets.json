@@ -1,0 +1,507 @@
+{
+  "source": "legacy Agent Player 1 working tree, captured 2026-09-04",
+  "tools": {
+    "defense": [
+      {
+        "type": "function",
+        "name": "scratch_play_move",
+        "description": "Play one legal SAN move on the scratchboard only.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            },
+            "move": {
+              "type": "string",
+              "description": "Legal SAN move from the current scratchboard legal moves."
+            }
+          },
+          "required": [
+            "justification",
+            "move"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "scratch_undo",
+        "description": "Undo the most recent scratchboard move.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            }
+          },
+          "required": [
+            "justification"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "scratch_reset",
+        "description": "Reset the scratchboard to the canonical position.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            }
+          },
+          "required": [
+            "justification"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "inspect_square",
+        "description": "Inspect one square on the canonical board or current scratchboard. Returns the occupant and the agent and opponent pieces targeting it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            },
+            "board": {
+              "type": "string",
+              "enum": [
+                "canonical",
+                "scratch"
+              ],
+              "description": "Board state to inspect."
+            },
+            "square": {
+              "type": "string",
+              "pattern": "^[a-h][1-8]$",
+              "description": "Board square to inspect, such as e4."
+            }
+          },
+          "required": [
+            "justification",
+            "board",
+            "square"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "submit_defense_report",
+        "description": "Submit the terminal one-paragraph Defense Report and end Phase 1.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "report": {
+              "type": "string",
+              "minLength": 40,
+              "maxLength": 1200,
+              "pattern": "^Severity: (Critical|Urgent|Manageable|None)\\. [^\\r\\n]+$",
+              "description": "One concise paragraph stating threat severity, evidence, and credible responses."
+            }
+          },
+          "required": [
+            "report"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    ],
+    "attack": [
+      {
+        "type": "function",
+        "name": "scratch_play_move",
+        "description": "Play one legal SAN move on the scratchboard only.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            },
+            "move": {
+              "type": "string",
+              "description": "Legal SAN move from the current scratchboard legal moves."
+            }
+          },
+          "required": [
+            "justification",
+            "move"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "scratch_undo",
+        "description": "Undo the most recent scratchboard move.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            }
+          },
+          "required": [
+            "justification"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "scratch_reset",
+        "description": "Reset the scratchboard to the canonical position.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            }
+          },
+          "required": [
+            "justification"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "inspect_square",
+        "description": "Inspect one square on the canonical board or current scratchboard. Returns the occupant and the agent and opponent pieces targeting it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            },
+            "board": {
+              "type": "string",
+              "enum": [
+                "canonical",
+                "scratch"
+              ],
+              "description": "Board state to inspect."
+            },
+            "square": {
+              "type": "string",
+              "pattern": "^[a-h][1-8]$",
+              "description": "Board square to inspect, such as e4."
+            }
+          },
+          "required": [
+            "justification",
+            "board",
+            "square"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "submit_attack_report",
+        "description": "Submit the terminal one-paragraph Attack Report and end Phase 2.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "report": {
+              "type": "string",
+              "minLength": 40,
+              "maxLength": 1200,
+              "pattern": "^Opportunity: (Decisive|Strong|Practical|None)\\. [^\\r\\n]+$",
+              "description": "One concise paragraph stating attacking potential, evidence, and tested continuations."
+            }
+          },
+          "required": [
+            "report"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    ],
+    "synthesis": [
+      {
+        "type": "function",
+        "name": "scratch_play_move",
+        "description": "Play one legal SAN move on the scratchboard only.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            },
+            "move": {
+              "type": "string",
+              "description": "Legal SAN move from the current scratchboard legal moves."
+            }
+          },
+          "required": [
+            "justification",
+            "move"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "scratch_undo",
+        "description": "Undo the most recent scratchboard move.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            }
+          },
+          "required": [
+            "justification"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "scratch_reset",
+        "description": "Reset the scratchboard to the canonical position.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            }
+          },
+          "required": [
+            "justification"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "inspect_square",
+        "description": "Inspect one square on the canonical board or current scratchboard. Returns the occupant and the agent and opponent pieces targeting it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible sentence explaining the concrete uncertainty this call resolves."
+            },
+            "board": {
+              "type": "string",
+              "enum": [
+                "canonical",
+                "scratch"
+              ],
+              "description": "Board state to inspect."
+            },
+            "square": {
+              "type": "string",
+              "pattern": "^[a-h][1-8]$",
+              "description": "Board square to inspect, such as e4."
+            }
+          },
+          "required": [
+            "justification",
+            "board",
+            "square"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      },
+      {
+        "type": "function",
+        "name": "submit_move",
+        "description": "Submit the final legal SAN move for the canonical board and end Phase 3.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "justification": {
+              "type": "string",
+              "description": "Visible summary of the report comparison, candidate verification, and final decision."
+            },
+            "move": {
+              "type": "string",
+              "description": "Legal SAN move from the current canonical legal moves."
+            }
+          },
+          "required": [
+            "justification",
+            "move"
+          ],
+          "additionalProperties": false
+        },
+        "strict": true
+      }
+    ]
+  },
+  "instructions": {
+    "defense": "You are Agent Player 1 running only Phase 1: Defense. Produce a defensive report, not a chess move. Do not use an engine, opening book, best-move source, or outside evaluator.\n\n## Shared Contract\n\n---\nname: agent-player-1\ndescription: Shared contract for the three-phase Agent Player 1 chess harness.\n---\n\n# Agent Player 1\n\nAgent Player 1 is being rebuilt as a three-phase move-selection system.\n\nThe harness owns deterministic board state, legal move validation, tool\nexecution, phase transitions, and turn-local state. The model remains\nresponsible for chess judgment.\n\n## Scratchboard Depth Limit\n\nUse the scratchboard to verify concrete candidate lines, not to search\nindefinitely. Limit each scratchboard branch to four halfmoves from the\ncanonical position. A halfmove is one move by either side, so this usually\nmeans the candidate move, the strongest credible reply, and no more than two\ncontinuation moves.\n\nWhen a branch reaches four halfmoves, stop extending it and summarize what the\nline proved for the current phase. Use `scratch_reset` before testing a\ndifferent branch from the canonical position.\n\n## Reasoning Budget and Forced-Action Fallback\n\nEach phase has a 2000-token reasoning budget for any pass that does not call a\ntool. If a pass uses that budget without calling a tool, the harness ends that\npass and reruns the same phase through LM Studio with reasoning disabled.\n\nThe fallback pass receives the complete visible output from the exhausted pass,\nthen a final instruction requiring one available tool call. Treat that previous\noutput as context only. In fallback mode, do not continue analysis; call exactly\none available tool using the current dynamic input, Tool History, and previous\nexhausted output.\n\nAt runtime, compose this shared contract with exactly one phase file:\n\n- `phases/01_defense/PHASE.md`\n- `phases/02_attack/PHASE.md`\n- `phases/03_decision/PHASE.md`\n\nDo not load multiple phase files into the same model request. Phase 1 is an\nindependently runnable defensive report phase. Phase 2 is an independently\nrunnable attacking report phase from the same canonical position. Phase 3 is an\nindependently runnable final decision phase that consumes both independent\nreports and submits one legal move. The harness orchestrates these phases in\nthat order while keeping their model contexts separate.\n\n## Phase Instructions\n\n# Phase 1: Defense\n\n## Objective\n\nDetermine whether the current position creates an immediate defensive\nobligation. Identify the opponent's most forcing move or moves, judge their\nseverity, and investigate credible ways to respond.\n\nThis phase produces a defensive report for a later decision phase. Do not\nchoose or submit the final move here.\n\n## Authoritative Input\n\nTreat the game record, Current Check section, Opponent Forcing-Move Scan, and\nscratchboard results as authoritative board facts.\n\nThe forcing scan assumes the agent passes and the opponent is given the move.\nIt lists legal checks first, followed by legal non-checking captures. A\ncapturing check appears only under Checks.\n\nSEE is a local material calculation for captures and recaptures on one target\nsquare. Its sequence is not a complete tactical line, particularly when the\ninitial capture gives check. Non-capturing checks have no SEE result. Use SEE\nas evidence about material risk, not as proof that a move is best or harmless.\n\n## Defensive Scan vs Scratchboard\n\nThe Opponent Forcing-Move Scan is a diagnostic only. It asks: if the agent made\nno move, what forcing checks or captures would the opponent have?\n\nThat pass assumption does not change the scratchboard start state. The\nscratchboard always starts from the canonical position with the agent to move.\n\nTo test a defensive response, first play the agent's candidate response on the\nscratchboard. Then test whether the opponent's strongest listed or related\nforcing continuation is still legal, stronger, weaker, or neutralized. Do not\nbegin a scratchboard line by playing the opponent's scanned move unless the\nscratchboard side to move actually belongs to the opponent.\n\n## Defensive Review\n\nWork in this order:\n\n1. If Current Check is active, resolving it is mandatory. Consider only listed\n   legal evasions. A counterattack matters only if it also resolves the check.\n2. Otherwise, examine every opponent check before examining captures. Determine\n   whether each check creates mate, material loss, displacement, or another\n   concrete consequence.\n3. Examine captures in order of agent material loss. Account for the complete\n   displayed SEE sequence and whether a larger tactical consequence overrides\n   the local exchange result.\n4. Identify practical response types: move the target, capture or deflect the\n   attacker, add protection, interpose, simplify, or create stronger forcing\n   counterplay.\n5. Use the scratchboard when a response or continuation must be tested on an\n   exact board. Verify that the opponent cannot still execute the original\n   threat or replace it with something stronger.\n6. Use `inspect_square` when exact control of a threatened, capture, or blocking\n   square is unclear. Choose canonical or scratch explicitly.\n\nDo not invent an urgent threat when the scan and position do not support one.\nIt is valid to conclude that there is no immediate defensive obligation.\n\n## Completion\n\nWhen the defensive review is complete, call `submit_defense_report` with one\nconcise paragraph. Begin with exactly one of: `Severity: Critical.`,\n`Severity: Urgent.`, `Severity: Manageable.`, or `Severity: None.`\n\n- `Critical` means checkmate or decisive material loss is immediately forced.\n- `Urgent` means a concrete threat requires an immediate response.\n- `Manageable` means a real threat exists but several viable responses or\n  acceptable outcomes remain.\n- `None` means no immediate defensive obligation was found.\n\nThe paragraph must:\n\n- identify the most important opponent move or moves\n- explain the concrete consequence and relevant SEE evidence\n- state whether an immediate response is required\n- name the most credible response types or tested moves\n- distinguish scratchboard-tested conclusions from unverified possibilities\n\nDo not rank the agent's final move candidates or make the final move decision.\n\n## Current Output Protocol\n\nThis run uses the text tool-call interface. The provider will not receive native function tool definitions.\nThis section supersedes earlier wording about native function calls or reasoning-only passes.\n\nYou may reason in normal text before the tool call. Every response must end with exactly one tagged tool-call block:\n\n<agent_tool_call>\n{\"tool\":\"scratch_play_move\",\"arguments\":{\"justification\":\"I need to test whether e4 changes the forcing-move picture before ranking candidates.\",\"move\":\"e4\"}}\n</agent_tool_call>\n\nRules:\n\n- Include exactly one tagged block.\n- The tagged block must contain one JSON object.\n- Use `tool` for the tool name and `arguments` for that tool's argument object.\n- Do not put `action`, `tool`, `arguments`, `fen`, `position_id`, or `positions` inside the nested `arguments` object.\n- Do not put any non-whitespace text after the closing tag.\n- The harness will execute only the parsed tagged tool call.\n\nTool schemas:\n\n```json\n[\n  {\n    \"name\": \"scratch_play_move\",\n    \"description\": \"Play one legal SAN move on the scratchboard only.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        },\n        \"move\": {\n          \"type\": \"string\",\n          \"description\": \"Legal SAN move from the current scratchboard legal moves.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"move\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"scratch_undo\",\n    \"description\": \"Undo the most recent scratchboard move.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        }\n      },\n      \"required\": [\n        \"justification\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"scratch_reset\",\n    \"description\": \"Reset the scratchboard to the canonical position.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        }\n      },\n      \"required\": [\n        \"justification\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"inspect_square\",\n    \"description\": \"Inspect one square on the canonical board or current scratchboard. Returns the occupant and the agent and opponent pieces targeting it.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        },\n        \"board\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"canonical\",\n            \"scratch\"\n          ],\n          \"description\": \"Board state to inspect.\"\n        },\n        \"square\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[a-h][1-8]$\",\n          \"description\": \"Board square to inspect, such as e4.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"board\",\n        \"square\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"submit_defense_report\",\n    \"description\": \"Submit the terminal one-paragraph Defense Report and end Phase 1.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"report\": {\n          \"type\": \"string\",\n          \"minLength\": 40,\n          \"maxLength\": 1200,\n          \"pattern\": \"^Severity: (Critical|Urgent|Manageable|None)\\\\. [^\\\\r\\\\n]+$\",\n          \"description\": \"One concise paragraph stating threat severity, evidence, and credible responses.\"\n        }\n      },\n      \"required\": [\n        \"report\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n]\n```",
+    "attack": "You are Agent Player 1 running only Phase 2: Attack. Produce an attacking report, not a chess move. Do not use an engine, opening book, best-move source, or outside evaluator.\n\n## Shared Contract\n\n---\nname: agent-player-1\ndescription: Shared contract for the three-phase Agent Player 1 chess harness.\n---\n\n# Agent Player 1\n\nAgent Player 1 is being rebuilt as a three-phase move-selection system.\n\nThe harness owns deterministic board state, legal move validation, tool\nexecution, phase transitions, and turn-local state. The model remains\nresponsible for chess judgment.\n\n## Scratchboard Depth Limit\n\nUse the scratchboard to verify concrete candidate lines, not to search\nindefinitely. Limit each scratchboard branch to four halfmoves from the\ncanonical position. A halfmove is one move by either side, so this usually\nmeans the candidate move, the strongest credible reply, and no more than two\ncontinuation moves.\n\nWhen a branch reaches four halfmoves, stop extending it and summarize what the\nline proved for the current phase. Use `scratch_reset` before testing a\ndifferent branch from the canonical position.\n\n## Reasoning Budget and Forced-Action Fallback\n\nEach phase has a 2000-token reasoning budget for any pass that does not call a\ntool. If a pass uses that budget without calling a tool, the harness ends that\npass and reruns the same phase through LM Studio with reasoning disabled.\n\nThe fallback pass receives the complete visible output from the exhausted pass,\nthen a final instruction requiring one available tool call. Treat that previous\noutput as context only. In fallback mode, do not continue analysis; call exactly\none available tool using the current dynamic input, Tool History, and previous\nexhausted output.\n\nAt runtime, compose this shared contract with exactly one phase file:\n\n- `phases/01_defense/PHASE.md`\n- `phases/02_attack/PHASE.md`\n- `phases/03_decision/PHASE.md`\n\nDo not load multiple phase files into the same model request. Phase 1 is an\nindependently runnable defensive report phase. Phase 2 is an independently\nrunnable attacking report phase from the same canonical position. Phase 3 is an\nindependently runnable final decision phase that consumes both independent\nreports and submits one legal move. The harness orchestrates these phases in\nthat order while keeping their model contexts separate.\n\n## Phase Instructions\n\n# Phase 2: Attack\n\n## Objective\n\nDetermine whether the agent has an immediate forcing opportunity. Identify the\nstrongest checks, captures, or concrete threats available from the canonical\nposition and investigate their most credible continuations.\n\nThis phase produces an attacking report for a later decision phase. Do not\nchoose or submit the final move here.\n\n## Authoritative Input\n\nTreat the game record, Agent Forcing-Move Scan, and scratchboard results as\nauthoritative facts.\n\nThe forcing scan uses the real canonical position with the agent to move. It\nlists legal checks first, followed by legal non-checking captures. A capturing\ncheck appears only under Checks.\n\nSEE is a local material calculation for captures and recaptures on one target\nsquare. Its sequence is not a complete tactical line, particularly when the\ninitial capture gives check. Non-capturing checks have no SEE result. Use SEE\nas evidence about material risk, not as proof that a move is best or harmless.\n\nThe scan is tactical triage, not a complete move list. A strong non-capturing\nthreat may be considered when it is visible from the position, but do not claim\nthat it is forcing without testing its most credible defensive reply.\n\n## Attacking Review\n\nWork in this order:\n\n1. Examine every available check before examining captures. Determine whether\n   each check forces mate, material gain, displacement, or another concrete\n   concession.\n2. Examine captures in order of agent material gain. Account for the complete\n   displayed SEE sequence and whether a larger tactical consequence overrides\n   the local exchange result.\n3. Consider concrete non-capturing threats only when the position supports a\n   clear target or forced consequence.\n4. Use the scratchboard to test the opponent's strongest credible reply and the\n   agent's continuation. Separate verified lines from untested ideas.\n5. Use `inspect_square` to verify the occupant and both sides' control of a\n   tactical target on canonical or scratch when that fact affects the line.\n\nDo not invent an attack when the scan and position do not support one. It is\nvalid to conclude that there is no meaningful forcing opportunity.\n\n## Completion\n\nWhen the attacking review is complete, call `submit_attack_report` with one\nconcise paragraph. Begin with exactly one of: `Opportunity: Decisive.`,\n`Opportunity: Strong.`, `Opportunity: Practical.`, or `Opportunity: None.`\n\n- `Decisive` means forced mate or decisive material gain is verified.\n- `Strong` means a concrete favorable forcing continuation is verified.\n- `Practical` means a move creates meaningful pressure, but no forced gain is\n  verified.\n- `None` means no meaningful forcing opportunity was found.\n\nThe paragraph must:\n\n- identify the strongest checks, captures, or concrete threats\n- explain the relevant SEE evidence and tactical consequence\n- summarize the opponent's strongest credible reply\n- distinguish scratchboard-tested conclusions from unverified possibilities\n\nDo not rank all final move candidates or make the final move decision.\n\n## Current Output Protocol\n\nThis run uses the text tool-call interface. The provider will not receive native function tool definitions.\nThis section supersedes earlier wording about native function calls or reasoning-only passes.\n\nYou may reason in normal text before the tool call. Every response must end with exactly one tagged tool-call block:\n\n<agent_tool_call>\n{\"tool\":\"scratch_play_move\",\"arguments\":{\"justification\":\"I need to test whether e4 changes the forcing-move picture before ranking candidates.\",\"move\":\"e4\"}}\n</agent_tool_call>\n\nRules:\n\n- Include exactly one tagged block.\n- The tagged block must contain one JSON object.\n- Use `tool` for the tool name and `arguments` for that tool's argument object.\n- Do not put `action`, `tool`, `arguments`, `fen`, `position_id`, or `positions` inside the nested `arguments` object.\n- Do not put any non-whitespace text after the closing tag.\n- The harness will execute only the parsed tagged tool call.\n\nTool schemas:\n\n```json\n[\n  {\n    \"name\": \"scratch_play_move\",\n    \"description\": \"Play one legal SAN move on the scratchboard only.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        },\n        \"move\": {\n          \"type\": \"string\",\n          \"description\": \"Legal SAN move from the current scratchboard legal moves.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"move\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"scratch_undo\",\n    \"description\": \"Undo the most recent scratchboard move.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        }\n      },\n      \"required\": [\n        \"justification\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"scratch_reset\",\n    \"description\": \"Reset the scratchboard to the canonical position.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        }\n      },\n      \"required\": [\n        \"justification\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"inspect_square\",\n    \"description\": \"Inspect one square on the canonical board or current scratchboard. Returns the occupant and the agent and opponent pieces targeting it.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        },\n        \"board\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"canonical\",\n            \"scratch\"\n          ],\n          \"description\": \"Board state to inspect.\"\n        },\n        \"square\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[a-h][1-8]$\",\n          \"description\": \"Board square to inspect, such as e4.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"board\",\n        \"square\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"submit_attack_report\",\n    \"description\": \"Submit the terminal one-paragraph Attack Report and end Phase 2.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"report\": {\n          \"type\": \"string\",\n          \"minLength\": 40,\n          \"maxLength\": 1200,\n          \"pattern\": \"^Opportunity: (Decisive|Strong|Practical|None)\\\\. [^\\\\r\\\\n]+$\",\n          \"description\": \"One concise paragraph stating attacking potential, evidence, and tested continuations.\"\n        }\n      },\n      \"required\": [\n        \"report\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n]\n```",
+    "synthesis": "You are Agent Player 1 running only Phase 3: Decision. Compare the prior reports, verify serious candidates, and submit exactly one legal move. Do not use an engine, opening book, best-move source, or outside evaluator.\n\n## Shared Contract\n\n---\nname: agent-player-1\ndescription: Shared contract for the three-phase Agent Player 1 chess harness.\n---\n\n# Agent Player 1\n\nAgent Player 1 is being rebuilt as a three-phase move-selection system.\n\nThe harness owns deterministic board state, legal move validation, tool\nexecution, phase transitions, and turn-local state. The model remains\nresponsible for chess judgment.\n\n## Scratchboard Depth Limit\n\nUse the scratchboard to verify concrete candidate lines, not to search\nindefinitely. Limit each scratchboard branch to four halfmoves from the\ncanonical position. A halfmove is one move by either side, so this usually\nmeans the candidate move, the strongest credible reply, and no more than two\ncontinuation moves.\n\nWhen a branch reaches four halfmoves, stop extending it and summarize what the\nline proved for the current phase. Use `scratch_reset` before testing a\ndifferent branch from the canonical position.\n\n## Reasoning Budget and Forced-Action Fallback\n\nEach phase has a 2000-token reasoning budget for any pass that does not call a\ntool. If a pass uses that budget without calling a tool, the harness ends that\npass and reruns the same phase through LM Studio with reasoning disabled.\n\nThe fallback pass receives the complete visible output from the exhausted pass,\nthen a final instruction requiring one available tool call. Treat that previous\noutput as context only. In fallback mode, do not continue analysis; call exactly\none available tool using the current dynamic input, Tool History, and previous\nexhausted output.\n\nAt runtime, compose this shared contract with exactly one phase file:\n\n- `phases/01_defense/PHASE.md`\n- `phases/02_attack/PHASE.md`\n- `phases/03_decision/PHASE.md`\n\nDo not load multiple phase files into the same model request. Phase 1 is an\nindependently runnable defensive report phase. Phase 2 is an independently\nrunnable attacking report phase from the same canonical position. Phase 3 is an\nindependently runnable final decision phase that consumes both independent\nreports and submits one legal move. The harness orchestrates these phases in\nthat order while keeping their model contexts separate.\n\n## Phase Instructions\n\n# Phase 3: Decision\n\n## Objective\n\nChoose one legal move by reconciling the Phase 1 defensive obligation with the\nPhase 2 attacking opportunity. Decide whether the position calls for defense,\nattack, a move that combines both purposes, or ordinary development, then\nverify the serious candidates on the scratchboard.\n\nThis is the only phase that chooses and submits the final move.\n\n## Authoritative Input\n\nTreat the game record, canonical legal moves, and deterministic scratchboard\nresults as authoritative board facts. The Phase 1 Defense Report and Phase 2\nAttack Report are prior-phase judgments. Use them as focused evidence, but\ncorrect a conclusion when exact scratchboard analysis contradicts it.\n\nThe canonical board never changes during this phase. Only `submit_move` ends\nthe phase and returns a move for the canonical position.\n\n## Decision Priority\n\nWork in this order:\n\n1. Resolve any forced legal requirement, including check.\n2. Prefer a verified forced mate or decisive material gain when it overrides\n   the reported defensive threat.\n3. Address a Critical or Urgent defensive obligation when no stronger forcing\n   counterattack is verified.\n4. Prefer a tactically sound move that both neutralizes the threat and creates\n   or preserves pressure when one exists.\n5. Choose a developing move that improves activity, king safety, coordination,\n   or central control when neither report establishes an immediate obligation.\n\nA move is not best merely because it serves two purposes. Concrete tactical\ncorrectness comes first.\n\n## Candidate Comparison\n\nGenerate no more than three serious candidates. Include only categories that\nare credible in the current position. A typical set may contain the strongest\ndefensive move, strongest attacking move, and strongest combined or developing\nmove, but do not manufacture one candidate from every category.\n\nFor each serious candidate, determine:\n\n- whether it neutralizes the Phase 1 threat\n- whether the opponent can still execute or replace that threat\n- whether the Phase 2 opportunity survives the strongest credible reply\n- what concrete tactical or positional concession it permits\n\n## Scratchboard Verification\n\nThe scratchboard is the primary comparison mechanism. Start each distinct\ncandidate from canonical, play the candidate, test the opponent's strongest\ncredible response, and continue only far enough to resolve the uncertainty.\nUse `scratch_reset` before testing another branch. Two to four plies per\ncandidate is normally sufficient.\n\nUse `inspect_square` on canonical or scratch when candidate comparison depends\non the occupant or control of one concrete square. It reports square control,\nnot whether a candidate is objectively best.\n\nBefore submitting, verify the selected candidate and its strongest credible\nreply unless the position has only one legal move or a terminal forced result\nis already exact. Tool History is the variation ledger; identify the candidate\nand uncertainty clearly in each justification so conclusions remain usable\nin later passes.\n\n## Completion\n\nCall `submit_move` exactly once when comparison is complete. It accepts only\n`move` and `justification`, and `move` must be one of the canonical legal SAN\nmoves.\n\nThe final justification must concisely summarize:\n\n- the governing conclusion from both phase reports\n- why the selected move is preferable to the most serious alternative\n- the decisive scratchboard conclusion, when scratch analysis was needed\n- whether the move primarily defends, attacks, combines both, or develops\n\nDo not introduce a new untested line in the final justification.\n\n## Current Output Protocol\n\nThis run uses the text tool-call interface. The provider will not receive native function tool definitions.\nThis section supersedes earlier wording about native function calls or reasoning-only passes.\n\nYou may reason in normal text before the tool call. Every response must end with exactly one tagged tool-call block:\n\n<agent_tool_call>\n{\"tool\":\"scratch_play_move\",\"arguments\":{\"justification\":\"I need to test whether e4 changes the forcing-move picture before ranking candidates.\",\"move\":\"e4\"}}\n</agent_tool_call>\n\nRules:\n\n- Include exactly one tagged block.\n- The tagged block must contain one JSON object.\n- Use `tool` for the tool name and `arguments` for that tool's argument object.\n- Do not put `action`, `tool`, `arguments`, `fen`, `position_id`, or `positions` inside the nested `arguments` object.\n- Do not put any non-whitespace text after the closing tag.\n- The harness will execute only the parsed tagged tool call.\n\nTool schemas:\n\n```json\n[\n  {\n    \"name\": \"scratch_play_move\",\n    \"description\": \"Play one legal SAN move on the scratchboard only.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        },\n        \"move\": {\n          \"type\": \"string\",\n          \"description\": \"Legal SAN move from the current scratchboard legal moves.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"move\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"scratch_undo\",\n    \"description\": \"Undo the most recent scratchboard move.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        }\n      },\n      \"required\": [\n        \"justification\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"scratch_reset\",\n    \"description\": \"Reset the scratchboard to the canonical position.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        }\n      },\n      \"required\": [\n        \"justification\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"inspect_square\",\n    \"description\": \"Inspect one square on the canonical board or current scratchboard. Returns the occupant and the agent and opponent pieces targeting it.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible sentence explaining the concrete uncertainty this call resolves.\"\n        },\n        \"board\": {\n          \"type\": \"string\",\n          \"enum\": [\n            \"canonical\",\n            \"scratch\"\n          ],\n          \"description\": \"Board state to inspect.\"\n        },\n        \"square\": {\n          \"type\": \"string\",\n          \"pattern\": \"^[a-h][1-8]$\",\n          \"description\": \"Board square to inspect, such as e4.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"board\",\n        \"square\"\n      ],\n      \"additionalProperties\": false\n    }\n  },\n  {\n    \"name\": \"submit_move\",\n    \"description\": \"Submit the final legal SAN move for the canonical board and end Phase 3.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"justification\": {\n          \"type\": \"string\",\n          \"description\": \"Visible summary of the report comparison, candidate verification, and final decision.\"\n        },\n        \"move\": {\n          \"type\": \"string\",\n          \"description\": \"Legal SAN move from the current canonical legal moves.\"\n        }\n      },\n      \"required\": [\n        \"justification\",\n        \"move\"\n      ],\n      \"additionalProperties\": false\n    }\n  }\n]\n```"
+  },
+  "defense_report": "Severity: None. No immediate defensive obligation was established by the reviewed position.",
+  "attack_report": "Opportunity: Practical. The central pawn advance develops space without a verified forced gain.",
+  "cases": [
+    {
+      "name": "initial",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*",
+      "side": "white",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Current Check\n\nStatus: None\n\n## Opponent Forcing-Move Scan\n\nAssumption: White passes without changing the position and Black is given the move.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nNa3, Nc3, Nf3, Nh3, a3, a4, b3, b4, c3, c4, d3, d4, e3, e4, f3, f4, g3, g4, h3, h4\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    },
+    {
+      "name": "active",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*",
+      "side": "white",
+      "scratch_moves": [
+        "e4",
+        "e5"
+      ],
+      "history": [
+        {
+          "type": "tool_call",
+          "tool": "inspect_square",
+          "justification": "Verify control of e4 before evaluating the central pawn advance.",
+          "arguments": {
+            "board": "canonical",
+            "square": "e4"
+          },
+          "ok": true,
+          "result_summary": "Inspected canonical e4; occupant=empty; opponent attackers=0; agent pieces targeting=0."
+        }
+      ],
+      "correction": "Call exactly one available tool.",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Current Check\n\nStatus: None\n\n## Opponent Forcing-Move Scan\n\nAssumption: White passes without changing the position and Black is given the move.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: active\nSide to move: white\nFEN: `rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2`\n\nMoves from canonical:\n\n```pgn\ne4 e5\n```\n\nScratchboard legal moves for white:\n\n```text\nNh3, Nf3, Ne2, Ba6, Bb5, Bc4, Bd3, Be2, Ke2, Qh5, Qg4, Qf3, Qe2, Nc3, Na3, h3, g3, f3, d3, c3, b3, a3, h4, g4, f4, d4, c4, b4, a4\n```\n\n## Tool History\n\n### 1. `inspect_square`\n\nJustification: Verify control of e4 before evaluating the central pawn advance.\n\nInput:\n\n```json\n{\n  \"board\": \"canonical\",\n  \"square\": \"e4\"\n}\n```\n\nStatus:\n\nsuccess\n\nResult summary:\n\nInspected canonical e4; occupant=empty; opponent attackers=0; agent pieces targeting=0.\n\n## Protocol Correction\n\nCall exactly one available tool.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: active\nSide to move: white\nFEN: `rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2`\n\nMoves from canonical:\n\n```pgn\ne4 e5\n```\n\nScratchboard legal moves for white:\n\n```text\nNh3, Nf3, Ne2, Ba6, Bb5, Bc4, Bd3, Be2, Ke2, Qh5, Qg4, Qf3, Qe2, Nc3, Na3, h3, g3, f3, d3, c3, b3, a3, h4, g4, f4, d4, c4, b4, a4\n```\n\n## Tool History\n\n### 1. `inspect_square`\n\nJustification: Verify control of e4 before evaluating the central pawn advance.\n\nInput:\n\n```json\n{\n  \"board\": \"canonical\",\n  \"square\": \"e4\"\n}\n```\n\nStatus:\n\nsuccess\n\nResult summary:\n\nInspected canonical e4; occupant=empty; opponent attackers=0; agent pieces targeting=0.\n\n## Protocol Correction\n\nCall exactly one available tool.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nNa3, Nc3, Nf3, Nh3, a3, a4, b3, b4, c3, c4, d3, d4, e3, e4, f3, f4, g3, g4, h3, h4\n```\n\n## Scratchboard\n\nStatus: active\nSide to move: white\nFEN: `rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2`\n\nMoves from canonical:\n\n```pgn\ne4 e5\n```\n\nScratchboard legal moves for white:\n\n```text\nNh3, Nf3, Ne2, Ba6, Bb5, Bc4, Bd3, Be2, Ke2, Qh5, Qg4, Qf3, Qe2, Nc3, Na3, h3, g3, f3, d3, c3, b3, a3, h4, g4, f4, d4, c4, b4, a4\n```\n\n## Tool History\n\n### 1. `inspect_square`\n\nJustification: Verify control of e4 before evaluating the central pawn advance.\n\nInput:\n\n```json\n{\n  \"board\": \"canonical\",\n  \"square\": \"e4\"\n}\n```\n\nStatus:\n\nsuccess\n\nResult summary:\n\nInspected canonical e4; occupant=empty; opponent attackers=0; agent pieces targeting=0.\n\n## Protocol Correction\n\nCall exactly one available tool.\n"
+      }
+    },
+    {
+      "name": "middlegame",
+      "fen": "rnb1kb1r/ppp1pppp/5n2/q7/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 5",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 *",
+      "side": "white",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 *\n```\n\n## Current Check\n\nStatus: None\n\n## Opponent Forcing-Move Scan\n\nAssumption: White passes without changing the position and Black is given the move.\n\n### Checks\n\n#### 1. ...Qe5+\n\nType: Non-capturing check\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 2. ...Qxc3+\n\nType: Capturing check\nSEE sequence: ...Qxc3+ bxc3\nAgent gain: 580 cp\n\n### Captures\n\n#### 1. ...Qxa2\n\nSEE sequence: ...Qxa2 Nxa2\nAgent gain: 800 cp\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 *\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\n#### 1. Bb5+\n\nType: Non-capturing check\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 *\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nBa6, Bb5+, Bc4, Bd2, Bd3, Be2, Be3, Bf4, Bg5, Bh6, Kd2, Ke2, Ne2, Nf3, Nh3, Qd2, Qd3, Qe2, Qf3, Qg4, Qh5, Rb1, a3, a4, b3, b4, d5, f3, f4, g3, g4, h3, h4\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    },
+    {
+      "name": "en_passant",
+      "fen": "rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 a6 2. e5 d5 *",
+      "side": "white",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 a6 2. e5 d5 *\n```\n\n## Current Check\n\nStatus: None\n\n## Opponent Forcing-Move Scan\n\nAssumption: White passes without changing the position and Black is given the move.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 a6 2. e5 d5 *\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\n#### 1. Bb5+\n\nType: Non-capturing check\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n### Captures\n\n#### 1. exd6\n\nSEE sequence: exd6 cxd6\nMaterial result: Equal\n\n#### 2. Bxa6\n\nSEE sequence: Bxa6 bxa6\nAgent loss: 230 cp\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 a6 2. e5 d5 *\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nBb5+, Bc4, Bd3, Be2, Bxa6, Ke2, Na3, Nc3, Ne2, Nf3, Nh3, Qe2, Qf3, Qg4, Qh5, a3, a4, b3, b4, c3, c4, d3, d4, e6, exd6, f3, f4, g3, g4, h3, h4\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    },
+    {
+      "name": "single_check",
+      "fen": "4r1k1/8/8/8/8/8/8/4K3 w - - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Current Check\n\nStatus: Active\nResponse requirement: Mandatory\nCheck type: Single check\nChecking piece: Black rook on e8\n\n### Legal Evasions\n\n#### 1. Kd1\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 2. Kd2\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 3. Kf1\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 4. Kf2\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n## Opponent Forcing-Move Scan\n\nStatus: Deferred\n\nA hypothetical pass is illegal while the agent is in check. Opponent checks and captures were not generated.\n\n### Checks\n\nDeferred.\n\n### Captures\n\nDeferred.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nKd1, Kd2, Kf1, Kf2\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    },
+    {
+      "name": "double_check",
+      "fen": "4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Current Check\n\nStatus: Active\nResponse requirement: Mandatory\nCheck type: Double check\nChecking pieces: Black bishop on b4; Black rook on e8\n\n### Legal Evasions\n\n#### 1. Kd1\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 2. Kf1\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 3. Kf2\n\nType: King move\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n## Opponent Forcing-Move Scan\n\nStatus: Deferred\n\nA hypothetical pass is illegal while the agent is in check. Opponent checks and captures were not generated.\n\n### Checks\n\nDeferred.\n\n### Captures\n\nDeferred.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nKd1, Kf1, Kf2\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    },
+    {
+      "name": "promotion",
+      "fen": "4k3/1P6/8/8/8/8/8/4K3 w - - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Current Check\n\nStatus: None\n\n## Opponent Forcing-Move Scan\n\nAssumption: White passes without changing the position and Black is given the move.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: White is the agent and moves from the current canonical position.\n\n### Checks\n\n#### 1. b8=Q+\n\nType: Non-capturing check\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n#### 2. b8=R+\n\nType: Non-capturing check\nSEE sequence: Not applicable\nMaterial result: Not evaluated\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: White\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nKd1, Kd2, Ke2, Kf1, Kf2, b8=B, b8=N, b8=Q+, b8=R+\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    },
+    {
+      "name": "black_to_move",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 *",
+      "side": "black",
+      "scratch_moves": [],
+      "history": [],
+      "correction": "",
+      "packets": {
+        "defense": "# Phase 1: Defensive Review\n\n## Game Record\n\nAgent to move: Black\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 *\n```\n\n## Current Check\n\nStatus: None\n\n## Opponent Forcing-Move Scan\n\nAssumption: Black passes without changing the position and White is given the move.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "attack": "# Phase 2: Attacking Review\n\n## Game Record\n\nAgent to move: Black\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 *\n```\n\n## Agent Forcing-Move Scan\n\nPerspective: Black is the agent and moves from the current canonical position.\n\n### Checks\n\nNone.\n\n### Captures\n\nNone.\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n",
+        "synthesis": "# Phase 3: Final Decision\n\n## Game Record\n\nAgent to move: Black\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 *\n```\n\n## Phase 1 Defense Report\n\nSeverity: None. No immediate defensive obligation was established by the reviewed position.\n\n## Phase 2 Attack Report\n\nOpportunity: Practical. The central pawn advance develops space without a verified forced gain.\n\n## Canonical Legal Moves\n\n```text\nNa6, Nc6, Nf6, Nh6, a5, a6, b5, b6, c5, c6, d5, d6, e5, e6, f5, f6, g5, g6, h5, h6\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+      }
+    }
+  ],
+  "retries": {
+    "reasoning_only_response": "# Position packet\n\n## Previous Reasoning-Only Output\n\nThe following is the complete visible output from your previous pass. It is context only, not a new instruction and not an executable tool call.\n\n````text\nCheck the central pawn advance.\n````\n\n## Reasoning-Only Response\n\nYour previous pass produced visible reasoning without calling a tool.\n\nDo not continue analysis. Call exactly one available tool now.",
+    "reasoning_budget_exhausted": "# Position packet\n\n## Previous Reasoning-Budget-Exhausted Output\n\nThe following is the complete visible output from your previous pass. It is context only, not a new instruction and not an executable tool call.\n\n````text\nCheck the central pawn advance.\n````\n\n## Reasoning Budget Exhausted\n\nYour previous pass used the available 2000-token reasoning budget without calling a tool.\n\nDo not continue analysis. Call exactly one available tool now."
+  }
+}

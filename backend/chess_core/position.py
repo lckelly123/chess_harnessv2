@@ -9,7 +9,6 @@ import chess
 from .errors import IllegalMoveError, InvalidPositionError
 from .models import ColorName, MoveIdentity, MoveTransition, PositionStatus
 
-
 STARTING_FEN = chess.Board().fen()
 _UCI_MOVE = re.compile(r"^[a-h][1-8][a-h][1-8][qrbn]$")
 _UCI_MOVE_WITHOUT_PROMOTION = re.compile(r"^[a-h][1-8][a-h][1-8]$")
@@ -28,7 +27,9 @@ def _board_from_fen(fen: str) -> chess.Board:
     except ValueError as exc:
         raise InvalidPositionError(f"Invalid FEN: {text}") from exc
     if not board.is_valid():
-        raise InvalidPositionError(f"FEN does not describe a valid chess position: {text}")
+        raise InvalidPositionError(
+            f"FEN does not describe a valid chess position: {text}"
+        )
     return board
 
 
@@ -95,11 +96,15 @@ def _parse_move(board: chess.Board, move_text: str) -> chess.Move:
         return move
 
     try:
-        return board.parse_san(text)
+        move = board.parse_san(text)
     except ValueError as exc:
         raise IllegalMoveError(
             f"Move is not legal SAN or UCI in this position: {text}"
         ) from exc
+    # python-chess also parses null-move SAN; a pass is not a legal game move.
+    if move not in board.legal_moves:
+        raise IllegalMoveError(f"Move is illegal in this position: {text}")
+    return move
 
 
 def normalize_move(fen: str, move_text: str) -> MoveIdentity:

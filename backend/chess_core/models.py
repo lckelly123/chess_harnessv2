@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-
 ColorName = Literal["white", "black"]
 ForcingScanStatus = Literal["ready", "in_check", "game_over"]
 ScratchStatus = Literal["unused", "active"]
@@ -91,6 +90,21 @@ class ForcingMove:
 
 
 @dataclass(frozen=True, slots=True)
+class CheckEvasion:
+    move: MoveIdentity
+    evasion_type: str
+    static_exchange: StaticExchangeResult | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentCheck:
+    check_type: str
+    checking_pieces: tuple[PieceInfo, ...]
+    legal_evasions: tuple[CheckEvasion, ...]
+    checkmate: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ForcingMoveScan:
     """Checks and non-checking captures available to one side."""
 
@@ -99,6 +113,7 @@ class ForcingMoveScan:
     checks: tuple[ForcingMove, ...] = ()
     captures: tuple[ForcingMove, ...] = ()
     reason: str | None = None
+    current_check: CurrentCheck | None = None
 
 
 @dataclass(frozen=True, slots=True)

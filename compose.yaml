@@ -5,9 +5,21 @@ services:
       target: development
     ports:
       - "8000:8000"
+    environment:
+      LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+      LMSTUDIO_MODEL: ${LMSTUDIO_MODEL:-}
+      LMSTUDIO_API_KEY: ${LMSTUDIO_API_KEY:-lm-studio}
+      LMSTUDIO_REASONING_EFFORT: ${LMSTUDIO_REASONING_EFFORT:-medium}
+      LMSTUDIO_RETRY_REASONING_EFFORT: ${LMSTUDIO_RETRY_REASONING_EFFORT:-none}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-chess-harness-v2-dev}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID:-}
     volumes:
       - ./backend/app:/app/app
       - ./backend/chess_core:/app/chess_core
+      - ./backend/harness:/app/harness
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 5s

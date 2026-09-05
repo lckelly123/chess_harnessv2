@@ -11,8 +11,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY chess_core ./chess_core
+COPY harness ./harness
 
 FROM base AS test
+COPY pyproject.toml .
 COPY requirements-dev.txt .
 RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY tests ./tests

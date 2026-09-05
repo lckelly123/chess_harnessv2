@@ -1,0 +1,133 @@
+{
+  "source": "Legacy Agent Player 2 working-tree builders, captured 2026-09-05; native action instructions excluded",
+  "prompt_version": "agent-player-2-direct-submit-v4",
+  "tools": [
+    {
+      "type": "function",
+      "name": "submit_move",
+      "description": "Submit the final legal SAN move for the canonical board and end the turn.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "justification": {
+            "type": "string",
+            "description": "Visible summary of the most important reasoning from this turn."
+          },
+          "move": {
+            "type": "string",
+            "description": "Legal SAN move from the current canonical legal moves."
+          }
+        },
+        "required": [
+          "justification",
+          "move"
+        ],
+        "additionalProperties": false
+      },
+      "strict": true
+    }
+  ],
+  "cases": [
+    {
+      "name": "initial",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `initial`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nNh3\nNf3\nNc3\nNa3\nh3\ng3\nf3\ne3\nd3\nc3\nb3\na3\nh4\ng4\nf4\ne4\nd4\nc4\nb4\na4\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: KQkq\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "black_to_move",
+      "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 *",
+      "side": "black",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `black_to_move`  \nAgent side: black  \nSide to move: black\n\n## Position\n\nFEN: `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 *\n```\n\n## Last Move\n\n```text\ne4\n```\n\n## Legal Moves\n\n```text\nNh6\nNf6\nNc6\nNa6\nh6\ng6\nf6\ne6\nd6\nc6\nb6\na6\nh5\ng5\nf5\ne5\nd5\nc5\nb5\na5\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: KQkq\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "middlegame",
+      "fen": "rnb1kb1r/ppp1pppp/5n2/q7/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 5",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 *",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `middlegame`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `rnb1kb1r/ppp1pppp/5n2/q7/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq - 1 5`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 d5 2. exd5 Qxd5 3. Nc3 Qa5 4. d4 Nf6 *\n```\n\n## Last Move\n\n```text\nNf6\n```\n\n## Legal Moves\n\n```text\nNh3\nNf3\nNe2\nBa6\nBb5+\nBc4\nBd3\nBe2\nKe2\nKd2\nQh5\nQg4\nQf3\nQd3\nQe2\nQd2\nBh6\nBg5\nBf4\nBe3\nBd2\nRb1\nd5\nh3\ng3\nf3\nb3\na3\nh4\ng4\nf4\nb4\na4\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 1\nFullmove number: 5\nCastling rights: KQkq\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "en_passant",
+      "fen": "rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 a6 2. e5 d5 *",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `en_passant`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n1. e4 a6 2. e5 d5 *\n```\n\n## Last Move\n\n```text\nd5\n```\n\n## Legal Moves\n\n```text\nNh3\nNf3\nNe2\nBxa6\nBb5+\nBc4\nBd3\nBe2\nKe2\nQh5\nQg4\nQf3\nQe2\nNc3\nNa3\ne6\nh3\ng3\nf3\nd3\nc3\nb3\na3\nh4\ng4\nf4\nd4\nc4\nb4\na4\nexd6\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 3\nCastling rights: KQkq\nEn passant square: d6\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "single_check",
+      "fen": "4r1k1/8/8/8/8/8/8/4K3 w - - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `single_check`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `4r1k1/8/8/8/8/8/8/4K3 w - - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nKf2\nKd2\nKf1\nKd1\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: true\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: -\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "double_check",
+      "fen": "4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `double_check`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4r1k1/8/8/8/1b6/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nKf2\nKf1\nKd1\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: true\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: -\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "promotion",
+      "fen": "4k3/1P6/8/8/8/8/8/4K3 w - - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `promotion`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `4k3/1P6/8/8/8/8/8/4K3 w - - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nKf2\nKe2\nKd2\nKf1\nKd1\nb8=Q+\nb8=R+\nb8=B\nb8=N\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: -\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "draw_status",
+      "fen": "4k3/8/8/8/8/8/8/R3K3 w - - 100 51",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/8/8/8/8/8/8/R3K3 w - - 100 51\"]\n[SetUp \"1\"]\n\n*",
+      "side": "white",
+      "history": [],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `draw_status`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `4k3/8/8/8/8/8/8/R3K3 w - - 100 51`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n[FEN \"4k3/8/8/8/8/8/8/R3K3 w - - 100 51\"]\n[SetUp \"1\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nKf2\nKe2\nKd2\nKf1\nKd1\nRa8+\nRa7\nRa6\nRa5\nRa4\nRa3\nRa2\nRd1\nRc1\nRb1\n```\n\n## Game Status\n\n```text\nGame over: true\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: true\nOutcome: 1/2-1/2\nHalfmove clock: 100\nFullmove number: 51\nCastling rights: -\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n"
+    },
+    {
+      "name": "rejected",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*",
+      "side": "white",
+      "history": [
+        {
+          "type": "tool_call",
+          "tool": "submit_move",
+          "ok": false,
+          "justification": "The attempted knight move needs correction to a canonical legal move.",
+          "arguments": {
+            "move": "Nf5"
+          },
+          "result_summary": "Rejected. `Nf5` is not legal on the current canonical board. Select a move from the canonical legal moves."
+        }
+      ],
+      "correction": "",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `rejected`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nNh3\nNf3\nNc3\nNa3\nh3\ng3\nf3\ne3\nd3\nc3\nb3\na3\nh4\ng4\nf4\ne4\nd4\nc4\nb4\na4\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: KQkq\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\n### 1. `submit_move`\n\nJustification: The attempted knight move needs correction to a canonical legal move.\n\nInput:\n\n```json\n{\n  \"move\": \"Nf5\"\n}\n```\n\nStatus:\n\nrejected\n\nResult summary:\n\nRejected. `Nf5` is not legal on the current canonical board. Select a move from the canonical legal moves.\n"
+    },
+    {
+      "name": "correction",
+      "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "pgn": "[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*",
+      "side": "white",
+      "history": [],
+      "correction": "Baseline must call only the `submit_move` tool.",
+      "packet": "# Chess Move Request\n\n## Task\n\nChoose one legal move for the side to move.\n\nWhen ready, call the terminal `submit_move` tool.\n\n## Player\n\nGame ID: `correction`  \nAgent side: white  \nSide to move: white\n\n## Position\n\nFEN: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`\n\nPGN so far:\n\n```pgn\n[Event \"?\"]\n[Site \"?\"]\n[Date \"????.??.??\"]\n[Round \"?\"]\n[White \"?\"]\n[Black \"?\"]\n[Result \"*\"]\n\n*\n```\n\n## Last Move\n\n```text\nNone.\n```\n\n## Legal Moves\n\n```text\nNh3\nNf3\nNc3\nNa3\nh3\ng3\nf3\ne3\nd3\nc3\nb3\na3\nh4\ng4\nf4\ne4\nd4\nc4\nb4\na4\n```\n\n## Game Status\n\n```text\nGame over: false\nCheck: false\nCheckmate: false\nStalemate: false\nInsufficient material: false\nCan claim draw: false\nOutcome: none\nHalfmove clock: 0\nFullmove number: 1\nCastling rights: KQkq\nEn passant square: none\n```\n\n## Scratchboard\n\nStatus: unused\n\n## Tool History\n\nNo tool calls yet.\n\n## Protocol Correction\n\nBaseline must call only the `submit_move` tool.\n"
+    }
+  ]
+}
