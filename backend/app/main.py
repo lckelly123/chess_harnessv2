@@ -1,82 +1,61 @@
-from fastapi import FastAPI, HTTPException, Query, status
+"""FastAPI composition root for the local match desk."""
 
-from .mock_data import HARNESSES, MATCHES, create_match
-from .models import (
-    HarnessVersion,
-    HealthResponse,
-    MatchDetail,
-    MatchList,
-    MatchSummary,
-    StartMatchRequest,
-)
+from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
-app = FastAPI(
-    title="Chess Harness v2 Mock API",
-    version="0.1.0",
-    description="An in-memory contract stub. It runs no chess engine or agent.",
-)
+from fastapi import FastAPI
+
+from harness.model import LMStudioModel
+
+from .matches.catalog import HarnessCatalog
+from .matches.manager import MatchManager, MatchSettings
+from .matches.repository import MatchRepository
+from .routes import router
 
 
-@app.get("/api/health", response_model=HealthResponse)
-def health() -> HealthResponse:
-    return HealthResponse(status="ok", data_source="mock")
+def create_app(
+    *,
+    repository: MatchRepository | None = None,
+    catalog: HarnessCatalog | None = None,
+    settings: MatchSettings | None = None,
+) -> FastAPI:
+    configured_settings = settings or MatchSettings.from_env()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        owns_repository = repository is None
+        active_repository = repository or MatchRepository(
+            configured_settings.database_path
+        )
+        active_repository.recover_interrupted()
+
+        model_client = None
+        active_catalog = catalog
+        if active_catalog is None:
+            model_client = LMStudioModel()
+            active_catalog = HarnessCatalog(model_client)
+
+        manager = MatchManager(active_repository, active_catalog, configured_settings)
+        app.state.match_manager = manager
+        try:
+            yield
+        finally:
+            await manager.close()
+            if model_client is not None:
+                await model_client.aclose()
+            if owns_repository:
+                active_repository.close()
+
+    application = FastAPI(
+        title="Chess Harness v2 API",
+        version="0.2.0",
+        description="Local deterministic match runner for versioned agent harnesses.",
+        lifespan=lifespan,
+    )
+    application.include_router(router)
+    return application
 
 
-@app.get("/api/harnesses", response_model=list[HarnessVersion])
-def list_harnesses() -> list[HarnessVersion]:
-    return HARNESSES
-
-
-@app.get("/api/matches", response_model=MatchList)
-def list_matches(query: str = Query(default="", max_length=100)) -> MatchList:
-    needle = query.strip().lower()
-    matches = sorted(MATCHES.values(), key=lambda item: item.started_at, reverse=True)
-    if needle:
-        matches = [
-            match
-            for match in matches
-            if needle
-            in " ".join(
-                (
-                    match.id,
-                    match.white.name,
-                    match.white.version,
-                    match.black.name,
-                    match.black.version,
-                    match.status,
-                    match.result or "",
-                )
-            ).lower()
-        ]
-    summaries = [MatchSummary.model_validate(match.model_dump()) for match in matches]
-    return MatchList(items=summaries, total=len(summaries))
-
-
-@app.get("/api/matches/{match_id}", response_model=MatchDetail)
-def get_match(match_id: str) -> MatchDetail:
-    match = MATCHES.get(match_id)
-    if match is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
-    return match
-
-
-@app.post("/api/matches", response_model=MatchDetail, status_code=status.HTTP_201_CREATED)
-def start_match(request: StartMatchRequest) -> MatchDetail:
-    harness_ids = {harness.id for harness in HARNESSES}
-    if request.white_harness_id not in harness_ids or request.black_harness_id not in harness_ids:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unknown harness version")
-    return create_match(request.white_harness_id, request.black_harness_id)
-
-
-@app.post("/api/matches/{match_id}/stop", response_model=MatchDetail)
-def stop_match(match_id: str) -> MatchDetail:
-    match = get_match(match_id)
-    if match.status == "running":
-        match.status = "stopped"
-        match.result = "aborted"
-        match.ended_at = match.started_at
-        for event in match.traces:
-            event.status = "complete"
-    return match
-
+app = create_app()

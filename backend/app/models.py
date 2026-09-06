@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def to_camel(value: str) -> str:
@@ -18,6 +18,38 @@ class HarnessVersion(ApiModel):
     name: str
     version: str
     summary: str
+
+
+class GameFolderRef(ApiModel):
+    id: str
+    name: str
+
+
+class GameFolder(GameFolderRef):
+    created_at: datetime
+    match_count: int
+
+
+class GameFolderList(ApiModel):
+    items: list[GameFolder]
+    total_matches: int
+    unfiled_count: int
+
+
+class CreateGameFolderRequest(ApiModel):
+    name: str = Field(min_length=1, max_length=60)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("Folder name cannot be blank.")
+        return normalized
+
+
+class AssignGameFolderRequest(ApiModel):
+    folder_id: str | None
 
 
 class PlayerRef(ApiModel):
@@ -58,6 +90,10 @@ class MatchSummary(ApiModel):
     current_fen: str
     move_count: int
     last_move: str | None
+    current_player: Literal["white", "black"] | None = None
+    current_phase: str | None = None
+    termination_reason: str | None = None
+    folder: GameFolderRef | None = None
 
 
 class MatchDetail(MatchSummary):
@@ -73,9 +109,10 @@ class MatchList(ApiModel):
 class StartMatchRequest(ApiModel):
     white_harness_id: str
     black_harness_id: str
+    folder_id: str | None = None
 
 
 class HealthResponse(ApiModel):
     status: Literal["ok"]
-    data_source: Literal["mock"]
-
+    data_source: Literal["sqlite"]
+    model_selection: Literal["explicit", "loaded-model-discovery"]

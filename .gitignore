@@ -3,6 +3,8 @@
 .vscode/
 __pycache__/
 .pytest_cache/
+.langgraph_api/
+.test-data/
 .ruff_cache/
 *.py[cod]
 .venv/
@@ -11,5 +13,9 @@ __pycache__/
 !.env.example
 frontend/node_modules/
 frontend/dist/
+backend/data/
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
 .impeccable/review/
 .impeccable/config.local.json

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from chess_core import IllegalMoveError, STARTING_FEN, ScratchBoard
+from chess_core import STARTING_FEN, IllegalMoveError, ScratchBoard
 
 
 def test_scratchboard_isolated_play_undo_and_reset() -> None:

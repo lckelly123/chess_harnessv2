@@ -6,7 +6,7 @@ from typing import Any, Literal, TypedDict
 import chess.pgn
 
 from chess_core import legal_moves, parse_position, position_status
-from harness.contracts import TurnRequest
+from harness.contracts import TurnInput, TurnRequest, turn_request_from_input
 
 
 class BaselineState(TypedDict):
@@ -78,3 +78,9 @@ def initial_state(request: TurnRequest) -> BaselineState:
         "decision": None,
         "events": [],
     }
+
+
+def prepare_turn(value: TurnInput) -> BaselineState:
+    """Initialize internal state from the small public graph input."""
+
+    return initial_state(turn_request_from_input(value))

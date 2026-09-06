@@ -5,12 +5,12 @@ from collections.abc import Callable
 from langgraph.graph import END, START, StateGraph
 
 from chess_core import normalize_move
-from harness.contracts import HarnessError, MoveDecision, TurnRequest
+from harness.contracts import HarnessError, MoveDecision, TurnInput, TurnRequest
 from harness.model import Model
 
 from .config import AgentConfig
 from .nodes import PhaseNodes
-from .state import TurnState, initial_state
+from .state import TurnState, initial_state, prepare_turn
 
 
 def route(state: TurnState) -> str:
@@ -21,16 +21,28 @@ def build_graph(
     model: Model,
     config: AgentConfig,
     cancellation_check: Callable[[], bool] | None = None,
+    *,
+    accept_turn_input: bool = False,
 ):
     nodes = PhaseNodes(model, config, cancellation_check)
-    graph = StateGraph(TurnState)
+    graph = (
+        StateGraph(TurnState, input_schema=TurnInput)
+        if accept_turn_input
+        else StateGraph(TurnState)
+    )
+    if accept_turn_input:
+        graph.add_node("prepare_turn", prepare_turn)
     graph.add_node("defense", nodes.defense)
     graph.add_node("defense_tools", nodes.defense_tools)
     graph.add_node("attack", nodes.attack)
     graph.add_node("attack_tools", nodes.attack_tools)
     graph.add_node("synthesis", nodes.synthesis)
     graph.add_node("synthesis_tools", nodes.synthesis_tools)
-    graph.add_edge(START, "defense")
+    if accept_turn_input:
+        graph.add_edge(START, "prepare_turn")
+        graph.add_edge("prepare_turn", "defense")
+    else:
+        graph.add_edge(START, "defense")
     graph.add_conditional_edges(
         "defense",
         route,

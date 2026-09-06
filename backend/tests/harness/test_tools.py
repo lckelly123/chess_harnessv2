@@ -123,6 +123,17 @@ def test_move_schemas_are_stable_strings_not_enums():
                 assert "enum" not in tool["parameters"]["properties"]["move"]
 
 
+def test_omitted_promotion_piece_is_accepted_as_a_queen():
+    result = execute(
+        "submit_move",
+        {"move": "a8", "justification": JUSTIFICATION},
+        phase="synthesis",
+        fen="7k/P7/8/8/8/8/8/7K w - - 0 1",
+    )
+
+    assert result["decision"]["move"] == "a8"
+
+
 @pytest.mark.parametrize(
     "text",
     [

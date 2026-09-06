@@ -72,12 +72,8 @@ def test_agent_forcing_scan_separates_checks_and_captures() -> None:
 
 
 def test_opponent_scan_uses_hypothetical_pass_or_defers_in_check() -> None:
-    ready = scan_opponent_forcing_moves(
-        "3r3k/8/8/8/8/8/K7/3Q4 w - - 0 1"
-    )
-    checked = scan_opponent_forcing_moves(
-        "k3r3/8/8/8/8/8/3R4/4K3 w - - 0 1"
-    )
+    ready = scan_opponent_forcing_moves("3r3k/8/8/8/8/8/K7/3Q4 w - - 0 1")
+    checked = scan_opponent_forcing_moves("k3r3/8/8/8/8/8/3R4/4K3 w - - 0 1")
 
     assert ready.status == "ready"
     assert ready.actor == "black"

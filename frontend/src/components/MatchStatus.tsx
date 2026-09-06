@@ -1,4 +1,4 @@
-import { CircleStop, Radio } from "lucide-react";
+import { CircleStop, Folder, Radio } from "lucide-react";
 import type { MatchDetail } from "../api/contracts";
 
 function formatDuration(startedAt: string, endedAt: string | null): string {
@@ -18,7 +18,12 @@ interface MatchStatusProps {
 }
 
 export function MatchStatus({ match, displayPly, replaying, currentMove, canStop, busy, onStop }: MatchStatusProps) {
-  const currentPlayer = displayPly % 2 === 0 ? match.white : match.black;
+  const replayPlayer = displayPly % 2 === 0 ? match.white : match.black;
+  const currentPlayer = replaying
+    ? replayPlayer
+    : match.currentPlayer
+      ? match.currentPlayer === "white" ? match.white : match.black
+      : null;
 
   return (
     <section className="match-status" aria-label="Match status">
@@ -27,6 +32,7 @@ export function MatchStatus({ match, displayPly, replaying, currentMove, canStop
           <div className="status-title-line">
             <h2>{replaying ? "Replay record" : "Live match"}</h2>
             <span className="record-id">{match.id}</span>
+            <span className="match-folder-label"><Folder size={12} aria-hidden="true" /> {match.folder?.name ?? "Unfiled"}</span>
           </div>
           <span className="current-notation"><i className="registration-mark" /> Current move <strong>{currentMove}</strong></span>
         </div>
@@ -44,12 +50,12 @@ export function MatchStatus({ match, displayPly, replaying, currentMove, canStop
         </div>
       </div>
       <div className="player-register">
-        <div className={`player-row ${currentPlayer.color === "white" ? "player-row--to-move" : ""}`}>
+        <div className={`player-row ${currentPlayer?.color === "white" ? "player-row--to-move" : ""}`}>
           <span className="color-swatch color-swatch--white" aria-label="White" />
           <strong>{match.white.name}</strong>
           <span>{match.white.version}</span>
         </div>
-        <div className={`player-row ${currentPlayer.color === "black" ? "player-row--to-move" : ""}`}>
+        <div className={`player-row ${currentPlayer?.color === "black" ? "player-row--to-move" : ""}`}>
           <span className="color-swatch color-swatch--black" aria-label="Black" />
           <strong>{match.black.name}</strong>
           <span>{match.black.version}</span>
@@ -59,7 +65,9 @@ export function MatchStatus({ match, displayPly, replaying, currentMove, canStop
         <div><dt>Ply</dt><dd>{displayPly} / {match.moveCount}</dd></div>
         <div><dt>Elapsed</dt><dd>{formatDuration(match.startedAt, match.endedAt)}</dd></div>
         <div><dt>Result</dt><dd>{match.result ?? "—"}</dd></div>
+        <div><dt>Phase</dt><dd>{match.currentPhase ?? "—"}</dd></div>
       </dl>
+      {match.terminationReason ? <p className="termination-reason">{match.terminationReason}</p> : null}
     </section>
   );
 }

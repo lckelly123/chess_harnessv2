@@ -91,6 +91,16 @@ def _parse_move(board: chess.Board, move_text: str) -> chess.Move:
             move = chess.Move.from_uci(lowered)
         except ValueError as exc:
             raise IllegalMoveError(f"Invalid UCI move: {text}") from exc
+        if move not in board.legal_moves and _UCI_MOVE_WITHOUT_PROMOTION.fullmatch(
+            lowered
+        ):
+            queen_promotion = chess.Move(
+                move.from_square,
+                move.to_square,
+                promotion=chess.QUEEN,
+            )
+            if queen_promotion in board.legal_moves:
+                return queen_promotion
         if move not in board.legal_moves:
             raise IllegalMoveError(f"Move is illegal in this position: {text}")
         return move
@@ -98,6 +108,16 @@ def _parse_move(board: chess.Board, move_text: str) -> chess.Move:
     try:
         move = board.parse_san(text)
     except ValueError as exc:
+        text_without_check = text.rstrip("+#")
+        for candidate in board.legal_moves:
+            if candidate.promotion != chess.QUEEN:
+                continue
+            san_without_queen = board.san(candidate).replace("=Q", "")
+            if (
+                text == san_without_queen
+                or text_without_check == san_without_queen.rstrip("+#")
+            ):
+                return candidate
         raise IllegalMoveError(
             f"Move is not legal SAN or UCI in this position: {text}"
         ) from exc
@@ -108,7 +128,11 @@ def _parse_move(board: chess.Board, move_text: str) -> chess.Move:
 
 
 def normalize_move(fen: str, move_text: str) -> MoveIdentity:
-    """Validate SAN or UCI and return one canonical move identity."""
+    """Validate SAN or UCI and return one canonical move identity.
+
+    An otherwise legal pawn promotion defaults to a queen when its promotion
+    piece is omitted. Explicit underpromotions remain unchanged.
+    """
 
     board = _board_from_fen(fen)
     return _move_identity(board, _parse_move(board, move_text))

@@ -16,27 +16,31 @@ The first release is a React web interface served locally through Docker. It let
 - start and stop an agent-v-agent match;
 - watch the backend-authored position, status, clocks, and trace stream;
 - search previous matches;
+- create named game folders and file new or existing matches into them;
 - open and replay a completed match move by move.
 
-The current data source is a mock implementation. The UI talks only to a typed match API so a later HTTP and event-stream adapter can replace the mock without changing page components.
+The current data source is a local SQLite-backed match runner. The UI talks only
+to a typed match API and polls authoritative snapshots while the selected agents
+run in the background.
 
 ## Product boundaries
 
 - The backend is authoritative for match state, legal moves, results, and traces.
 - The frontend never chooses chess moves and exposes no human move controls.
-- Mock data must be labeled as illustrative and must not imply that a real agent or LangGraph run occurred.
+- Public UI events summarize match progress; detailed graph execution remains in LangSmith.
 - The first release stays deliberately small: no authentication, tournaments, agent configuration editor, or trace mutation.
 - Harness selections are versioned identifiers, not editable prompts.
-- Stopping a match is the only destructive control and affects only the active mocked match.
+- Stopping a match is the only destructive control and affects only the active local match.
 
 ## Information contract
 
-The frontend needs four backend-facing resources:
+The frontend needs five backend-facing resources:
 
 1. **Harness versions** — stable id, display name, version, and short description.
-2. **Match summary** — id, players, status, result, timestamps, current FEN, move count, and last move.
-3. **Match detail** — the summary plus chronological positions/moves and structured trace events.
-4. **Match commands and updates** — start, stop, and a future server-sent event stream that reports snapshots and trace events.
+2. **Game folders** — stable id, user-defined name, and match count for durable organization.
+3. **Match summary** — id, folder, players, status, result, timestamps, current FEN, move count, and last move.
+4. **Match detail** — the summary plus chronological positions/moves and structured trace events.
+5. **Match commands and updates** — start, stop, folder assignment, and polled snapshots with a possible future server-sent event stream.
 
 Every trace event has a stable id, timestamp, ply, player, phase, status, short summary, and optional structured detail. The browser may format and filter these fields, but it does not infer hidden backend state.
 

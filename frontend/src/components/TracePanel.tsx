@@ -19,7 +19,7 @@ export function TracePanel({ events, activePly, onSelectPly }: TracePanelProps) 
       <header className="section-heading">
         <div>
           <h2>Decision trace</h2>
-          <p>Backend-authored events · illustrative</p>
+          <p>Public match events · detailed graph traces in LangSmith</p>
         </div>
         <span>{events.length} events</span>
       </header>
@@ -51,4 +51,3 @@ export function TracePanel({ events, activePly, onSelectPly }: TracePanelProps) 
     </section>
   );
 }
-

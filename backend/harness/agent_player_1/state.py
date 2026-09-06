@@ -3,7 +3,7 @@
 from typing import Any, Literal, TypedDict
 
 from chess_core import legal_moves, parse_position, position_status
-from harness.contracts import TurnRequest
+from harness.contracts import TurnInput, TurnRequest, turn_request_from_input
 
 Phase = Literal["defense", "attack", "synthesis"]
 
@@ -74,3 +74,9 @@ def initial_state(request: TurnRequest) -> TurnState:
         "decision": None,
         "events": [],
     }
+
+
+def prepare_turn(value: TurnInput) -> TurnState:
+    """Initialize internal state from the small public graph input."""
+
+    return initial_state(turn_request_from_input(value))

@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 
 from chess_core import (
+    STARTING_FEN,
     IllegalMoveError,
     InvalidPositionError,
-    STARTING_FEN,
     apply_move,
     legal_moves,
     normalize_move,
@@ -73,6 +73,29 @@ def test_special_moves_are_normalized_correctly() -> None:
     assert promotion.promotion == "queen"
     assert en_passant.uci == "e5d6"
     assert en_passant.is_en_passant
+
+
+@pytest.mark.parametrize("move", ["a8", "a8+", "a7a8"])
+def test_omitted_promotion_piece_defaults_to_queen(move) -> None:
+    promotion = normalize_move(
+        "7k/P7/8/8/8/8/8/7K w - - 0 1",
+        move,
+    )
+
+    assert promotion.san == "a8=Q+"
+    assert promotion.uci == "a7a8q"
+    assert promotion.promotion == "queen"
+
+
+def test_explicit_underpromotion_is_preserved() -> None:
+    promotion = normalize_move(
+        "7k/P7/8/8/8/8/8/7K w - - 0 1",
+        "a8=N",
+    )
+
+    assert promotion.san == "a8=N"
+    assert promotion.uci == "a7a8n"
+    assert promotion.promotion == "knight"
 
 
 def test_position_status_reports_checkmate() -> None:

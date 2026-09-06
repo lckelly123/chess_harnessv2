@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from chess_core import legal_moves
+from chess_core import IllegalMoveError, legal_moves, normalize_move
 
 LOW_INFORMATION = {
     "analyze",
@@ -101,7 +101,23 @@ def validate_string_arguments(name, arguments, fields) -> dict[str, str]:
 
 
 def require_legal_san(fen, move, board_name):
-    if move not in {identity.san for identity in legal_moves(fen)}:
+    legal_san = {identity.san for identity in legal_moves(fen)}
+    if move in legal_san:
+        return
+
+    omitted_queen_promotion = False
+    try:
+        normalized = normalize_move(fen, move)
+    except IllegalMoveError:
+        pass
+    else:
+        san_without_queen = normalized.san.replace("=Q", "")
+        omitted_queen_promotion = normalized.promotion == "queen" and (
+            move == san_without_queen
+            or move.rstrip("+#") == san_without_queen.rstrip("+#")
+        )
+
+    if not omitted_queen_promotion:
         moves_name = (
             "canonical legal moves"
             if board_name == "canonical board"

@@ -1,7 +1,8 @@
 # Agent Player 1: local LangGraph harness
 
-This slice implements one move decision. It does not start full games, persist
-match history, replace the mock API, or change the frontend.
+This package implements one move decision. The separate deterministic match
+runner invokes it for UI-started games, persists committed positions, and owns
+the authoritative board and lifecycle.
 
 ## Responsibilities
 
@@ -26,7 +27,7 @@ match history, replace the mock API, or change the frontend.
 Defense and attack are sequential independent reviews. Attack does not see the
 defense report. Synthesis sees both reports, but not earlier scratchboards or
 tool histories. A phase transition resets scratch/history/retry counters.
-The real position never changes in this graph. A later match runner must
+The real position never changes in this graph. The match runner must
 revalidate and commit the returned move and own game termination/history.
 
 The parent graph is the single turn itself, not a graph containing phase
@@ -36,8 +37,10 @@ their own trace spans; valid submissions take the edge to the next phase or END.
 ## LM Studio setup
 
 1. Load the exact model you want to use and start LM Studio's local server.
-2. Copy `.env.example` to `.env` at the repository root. Set `LMSTUDIO_MODEL` to
-   its exact served identifier. The harness does not select or load a model for you.
+2. Copy `.env.example` to `.env` at the repository root. For UI matches, leave
+   `LMSTUDIO_MODEL` blank to select the only loaded model, or set its exact served
+   identifier when multiple models are loaded. The standalone one-turn CLI still
+   requires the explicit setting. The application never loads a model for you.
 3. Docker Desktop uses `http://host.docker.internal:1234/v1` to reach LM Studio
    on the host. For Python running directly on the host, use
    `http://127.0.0.1:1234/v1` instead.
@@ -114,9 +117,9 @@ appears when provided. Only provider-exposed reasoning can be recorded; hidden
 internal reasoning is not available. The returned public move decision has no
 provider usage/authentication metadata.
 
-Tracing does not provide a match database or restart/resume semantics here.
-There is no checkpointer in this slice. Full game records and frontend replay
-remain future match-runner work.
+Tracing does not provide the match database or graph resume semantics. The graph
+has no checkpointer; the outer match runner separately stores committed positions
+and public events in SQLite for frontend replay.
 
 ## Verification and migration differences
 

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "agent_player_1": "./harness/studio.py:make_agent_player_1_graph",
+    "baseline": "./harness/studio.py:make_baseline_graph"
+  },
+  "env": "../.env"
+}

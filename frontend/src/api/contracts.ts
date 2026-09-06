@@ -10,6 +10,22 @@ export interface HarnessVersion {
   summary: string;
 }
 
+export interface GameFolderRef {
+  id: string;
+  name: string;
+}
+
+export interface GameFolder extends GameFolderRef {
+  createdAt: string;
+  matchCount: number;
+}
+
+export interface GameFolderList {
+  items: GameFolder[];
+  totalMatches: number;
+  unfiledCount: number;
+}
+
 export interface PlayerRef {
   harnessId: string;
   name: string;
@@ -48,6 +64,10 @@ export interface MatchSummary {
   currentFen: string;
   moveCount: number;
   lastMove: string | null;
+  currentPlayer: PlayerColor | null;
+  currentPhase: string | null;
+  terminationReason: string | null;
+  folder: GameFolderRef | null;
 }
 
 export interface MatchDetail extends MatchSummary {
@@ -63,13 +83,16 @@ export interface MatchList {
 export interface StartMatchInput {
   whiteHarnessId: string;
   blackHarnessId: string;
+  folderId: string | null;
 }
 
 export interface MatchApi {
   listHarnesses(): Promise<HarnessVersion[]>;
-  listMatches(query?: string): Promise<MatchList>;
+  listFolders(): Promise<GameFolderList>;
+  createFolder(name: string): Promise<GameFolder>;
+  listMatches(query?: string, folderId?: string | null): Promise<MatchList>;
   getMatch(matchId: string): Promise<MatchDetail>;
   startMatch(input: StartMatchInput): Promise<MatchDetail>;
   stopMatch(matchId: string): Promise<MatchDetail>;
+  assignMatchFolder(matchId: string, folderId: string | null): Promise<MatchDetail>;
 }
-

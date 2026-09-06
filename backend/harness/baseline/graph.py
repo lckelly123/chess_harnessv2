@@ -5,12 +5,12 @@ from collections.abc import Callable
 from langgraph.graph import END, START, StateGraph
 
 from chess_core import normalize_move
-from harness.contracts import HarnessError, MoveDecision, TurnRequest
+from harness.contracts import HarnessError, MoveDecision, TurnInput, TurnRequest
 from harness.model import Model
 
 from .config import BaselineConfig
 from .nodes import BaselineNodes
-from .state import BaselineState, initial_state
+from .state import BaselineState, initial_state, prepare_turn
 
 
 def route(state: BaselineState) -> str:
@@ -21,12 +21,24 @@ def build_graph(
     model: Model,
     config: BaselineConfig,
     cancellation_check: Callable[[], bool] | None = None,
+    *,
+    accept_turn_input: bool = False,
 ):
     nodes = BaselineNodes(model, config, cancellation_check)
-    graph = StateGraph(BaselineState)
+    graph = (
+        StateGraph(BaselineState, input_schema=TurnInput)
+        if accept_turn_input
+        else StateGraph(BaselineState)
+    )
+    if accept_turn_input:
+        graph.add_node("prepare_turn", prepare_turn)
     graph.add_node("decide", nodes.decide)
     graph.add_node("validate_submission", nodes.validate_submission)
-    graph.add_edge(START, "decide")
+    if accept_turn_input:
+        graph.add_edge(START, "prepare_turn")
+        graph.add_edge("prepare_turn", "decide")
+    else:
+        graph.add_edge(START, "decide")
     graph.add_conditional_edges(
         "decide",
         route,

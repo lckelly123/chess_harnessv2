@@ -16,10 +16,13 @@ services:
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-chess-harness-v2-dev}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
       LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID:-}
+      MATCH_DATABASE_PATH: ${MATCH_DATABASE_PATH:-/app/data/chess-harness.sqlite3}
+      MATCH_MAX_ACTIVE: ${MATCH_MAX_ACTIVE:-1}
     volumes:
       - ./backend/app:/app/app
       - ./backend/chess_core:/app/chess_core
       - ./backend/harness:/app/harness
+      - backend_data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 5s
@@ -43,3 +46,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  backend_data:

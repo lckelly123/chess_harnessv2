@@ -1,4 +1,12 @@
-import type { MatchApi, MatchDetail, MatchList, StartMatchInput, HarnessVersion } from "./contracts";
+import type {
+  GameFolder,
+  GameFolderList,
+  HarnessVersion,
+  MatchApi,
+  MatchDetail,
+  MatchList,
+  StartMatchInput,
+} from "./contracts";
 
 export class ApiError extends Error {
   constructor(
@@ -26,7 +34,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const matchApi: MatchApi = {
   listHarnesses: () => request<HarnessVersion[]>("/api/harnesses"),
-  listMatches: (query = "") => request<MatchList>(`/api/matches?query=${encodeURIComponent(query)}`),
+  listFolders: () => request<GameFolderList>("/api/folders"),
+  createFolder: (name) =>
+    request<GameFolder>("/api/folders", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  listMatches: (query = "", folderId) => {
+    const parameters = new URLSearchParams({ query });
+    if (typeof folderId === "string") parameters.set("folder_id", folderId);
+    if (folderId === null) parameters.set("unfiled_only", "true");
+    return request<MatchList>(`/api/matches?${parameters.toString()}`);
+  },
   getMatch: (matchId) => request<MatchDetail>(`/api/matches/${encodeURIComponent(matchId)}`),
   startMatch: (input: StartMatchInput) =>
     request<MatchDetail>("/api/matches", {
@@ -35,5 +54,9 @@ export const matchApi: MatchApi = {
     }),
   stopMatch: (matchId) =>
     request<MatchDetail>(`/api/matches/${encodeURIComponent(matchId)}/stop`, { method: "POST" }),
+  assignMatchFolder: (matchId, folderId) =>
+    request<MatchDetail>(`/api/matches/${encodeURIComponent(matchId)}/folder`, {
+      method: "PATCH",
+      body: JSON.stringify({ folderId }),
+    }),
 };
-

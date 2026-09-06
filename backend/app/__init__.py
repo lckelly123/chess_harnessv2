@@ -1,2 +1,1 @@
-"""Mock backend package for Chess Harness v2."""
-
+"""Local API and deterministic match runtime for Chess Harness v2."""

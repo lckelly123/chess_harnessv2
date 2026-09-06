@@ -5,8 +5,9 @@ the previous repository's Agent Player 2 (`agent-player-2-direct-submit-v4`).
 Its version is **`baseline-direct-submit-langgraph-v1`**: the chess input/tool
 behaviour is preserved, but the transport and orchestration deliberately differ.
 
-It does not start a match, apply its returned move, register a real frontend
-player, persist games, or configure LangSmith Studio. The web API remains mock.
+It does not itself apply moves or own a match. The deterministic match runner now
+registers it as a selectable frontend player, validates its result again, and
+persists the committed position. LangSmith Studio remains a separate setup.
 
 ## Responsibilities and graph
 
@@ -41,8 +42,9 @@ Shared code lives alongside the agent packages:
 
 Baseline does not import Agent Player 1 internals. Each graph invocation starts
 with isolated state, so callers can reuse a compiled graph for independent turns.
-Concurrent turns must not share or mutate a canonical game board; a future match
-runner must revalidate and commit moves sequentially within each game.
+Concurrent turns must not share or mutate a canonical game board. Callers must
+revalidate and commit moves sequentially; the current UI match runner provides
+that boundary and permits one active match by default.
 
 ## Inputs and output
 
@@ -128,6 +130,10 @@ LMSTUDIO_API_KEY=lm-studio
 LMSTUDIO_REASONING_EFFORT=medium
 LMSTUDIO_RETRY_REASONING_EFFORT=none
 ```
+
+The standalone command requires `LMSTUDIO_MODEL`. UI-started matches may leave it
+blank: the match catalog selects the only currently loaded model and rejects an
+ambiguous loaded set.
 
 Load a model and start LM Studio's server. The model/server must support the
 configured reasoning settings, including `none` on retries. Use the actual
