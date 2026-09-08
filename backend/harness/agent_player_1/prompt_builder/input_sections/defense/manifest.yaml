@@ -1,0 +1,68 @@
+version: 2
+phase: defense
+
+# Compatibility view consumed by the current prompt builder.
+system:
+  - tool_schemas.md
+  - phase_instructions.md
+user:
+  - board_state.md
+  - see_eval.md
+  - tool_history.md
+
+messages:
+  - role: system
+    sections:
+      - id: tool_schemas
+        template: system/tool_schemas.md
+      - id: phase_instructions
+        template: system/phase_instructions.md
+
+  - role: user
+    sections:
+      - id: canonical_board_state
+        template: user/board_state.md
+        provider: board_state
+        with:
+          source: canonical
+          include_scratch_moves: false
+
+      - id: canonical_see_eval
+        template: user/see_eval.md
+        provider: see_eval
+        with:
+          source: canonical
+          actor: opponent_after_pass
+          score_perspective: agent
+
+      - id: scratch_board_state
+        template: user/board_state.md
+        provider: board_state
+        when:
+          field: scratch.status
+          equals: active
+        with:
+          source: scratch
+          include_scratch_moves: true
+
+      - id: scratch_see_eval
+        template: user/see_eval.md
+        provider: see_eval
+        when:
+          field: scratch.status
+          equals: active
+        with:
+          source: scratch
+          actor: side_to_move
+          score_perspective: agent
+
+      - id: tool_history
+        template: user/tool_history.md
+        provider: tool_history
+
+      - id: forced_tool_retry
+        template: user/forced_tool_retry.md
+        provider: forced_tool_retry
+        when:
+          field: retry.active
+          equals: true
