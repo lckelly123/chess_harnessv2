@@ -7,11 +7,13 @@ import { FolderRail } from "./components/FolderRail";
 import { HistoryList } from "./components/HistoryList";
 import { MatchDocket } from "./components/MatchDocket";
 import { MatchStatus } from "./components/MatchStatus";
+import { PositionalTesting } from "./components/PositionalTesting";
 import { ReplayControls } from "./components/ReplayControls";
 import { TracePanel } from "./components/TracePanel";
 
 type DeskMode = "live" | "replay";
 type FolderFilter = "all" | "unfiled" | string;
+type WorkspaceSection = "matches" | "positional-testing";
 
 export default function App() {
   const [harnesses, setHarnesses] = useState<HarnessVersion[]>([]);
@@ -28,6 +30,7 @@ export default function App() {
   const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<DeskMode>("live");
+  const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>("matches");
   const [displayPly, setDisplayPly] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -243,17 +246,43 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <a className="brand" href="#top" aria-label="Chess Harness match desk">
+        <a
+          className="brand"
+          href="#top"
+          aria-label="Chess Harness match desk"
+          onClick={() => setWorkspaceSection("matches")}
+        >
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
           <span><strong>Chess Harness</strong><small>Match desk · v2</small></span>
         </a>
-        <div className="environment-mark">
-          <span className="environment-dot" />
-          Local agent runtime
+        <div className="app-header__actions">
+          <nav className="workspace-nav" aria-label="Workspace sections">
+            <button
+              className={workspaceSection === "matches" ? "workspace-nav__button workspace-nav__button--active" : "workspace-nav__button"}
+              type="button"
+              aria-current={workspaceSection === "matches" ? "page" : undefined}
+              onClick={() => setWorkspaceSection("matches")}
+            >
+              Match desk
+            </button>
+            <button
+              className={workspaceSection === "positional-testing" ? "workspace-nav__button workspace-nav__button--active" : "workspace-nav__button"}
+              type="button"
+              aria-current={workspaceSection === "positional-testing" ? "page" : undefined}
+              onClick={() => setWorkspaceSection("positional-testing")}
+            >
+              Positional testing
+            </button>
+          </nav>
+          <div className="environment-mark">
+            <span className="environment-dot" />
+            Local agent runtime
+          </div>
         </div>
       </header>
 
       <main id="top">
+        <div hidden={workspaceSection !== "matches"}>
         <MatchDocket
           harnesses={harnesses}
           whiteId={whiteId}
@@ -347,6 +376,10 @@ export default function App() {
             onOpen={openRecord}
             onAssignFolder={assignMatchFolder}
           />
+        </div>
+        </div>
+        <div hidden={workspaceSection !== "positional-testing"}>
+          <PositionalTesting />
         </div>
       </main>
       <footer>

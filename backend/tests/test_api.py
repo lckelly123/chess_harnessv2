@@ -5,12 +5,15 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.matches.catalog import (
     AGENT_PLAYER_1_ID,
+    AGENT_PLAYER_2_ID,
     BASELINE_ID,
     HARNESSES,
     UnknownHarnessError,
 )
 from app.matches.manager import MatchSettings
 from app.matches.repository import MatchRepository
+from chess_core import normalize_move
+from harness.contracts import MoveDecision
 
 
 class SlowPlayer:
@@ -18,9 +21,24 @@ class SlowPlayer:
         await asyncio.sleep(3600)
 
 
+class OneShotPlayer:
+    def __init__(self, catalog):
+        self.catalog = catalog
+
+    async def choose_move(self, request):
+        self.catalog.one_shot_requests.append(request)
+        return MoveDecision(
+            move=normalize_move(request.fen, "Qxe3+"),
+            justification="Wins the bishop with check.",
+            defense_report="No urgent defense.",
+            attack_report="Capture e3 with check.",
+        )
+
+
 class FakeCatalog:
     def __init__(self):
         self._definitions = {item.id: item for item in HARNESSES}
+        self.one_shot_requests = []
 
     def list(self):
         return list(self._definitions.values())
@@ -36,12 +54,17 @@ class FakeCatalog:
         self.definition(black_id)
         return SlowPlayer(), SlowPlayer(), "scripted-model"
 
+    async def create_player(self, harness_id, cancellation_check):
+        self.definition(harness_id)
+        return OneShotPlayer(self), "scripted-model"
+
 
 def test_real_api_contract_and_stop(database_path) -> None:
     repository = MatchRepository(str(database_path))
+    catalog = FakeCatalog()
     app = create_app(
         repository=repository,
-        catalog=FakeCatalog(),
+        catalog=catalog,
         settings=MatchSettings(
             database_path=":memory:",
             max_active=1,
@@ -58,7 +81,33 @@ def test_real_api_contract_and_stop(database_path) -> None:
             assert {item["id"] for item in harnesses.json()} == {
                 BASELINE_ID,
                 AGENT_PLAYER_1_ID,
+                AGENT_PLAYER_2_ID,
             }
+
+            positions = client.get("/api/positional-testing/positions")
+            assert positions.status_code == 200
+            assert positions.json()["items"][0]["id"] == "before_queen_blunder"
+            assert positions.json()["items"][0]["sideToMove"] == "black"
+            assert positions.json()["items"][0]["position"]["san"] == "Be3"
+
+            run = client.post(
+                "/api/positional-testing/runs",
+                json={
+                    "positionId": "before_queen_blunder",
+                    "harnessId": AGENT_PLAYER_1_ID,
+                },
+            )
+            assert run.status_code == 200
+            assert run.json()["positionId"] == "before_queen_blunder"
+            assert run.json()["harnessName"] == "Agent Player 1"
+            assert run.json()["model"] == "scripted-model"
+            assert run.json()["move"]["san"] == "Qxe3+"
+            assert run.json()["attackReport"] == "Capture e3 with check."
+            assert len(catalog.one_shot_requests) == 1
+            assert catalog.one_shot_requests[0].ply == 23
+            assert '[Event "Agent Player 1 Queen Blunder Test"]' in (
+                catalog.one_shot_requests[0].pgn
+            )
 
             folder_response = client.post(
                 "/api/folders", json={"name": "Baseline comparisons"}
@@ -140,5 +189,23 @@ def test_rejects_unknown_harness(database_path) -> None:
                 },
             )
             assert response.status_code == 422
+
+            positional_harness = client.post(
+                "/api/positional-testing/runs",
+                json={
+                    "positionId": "before_queen_blunder",
+                    "harnessId": "missing",
+                },
+            )
+            assert positional_harness.status_code == 422
+
+            positional_position = client.post(
+                "/api/positional-testing/runs",
+                json={
+                    "positionId": "missing",
+                    "harnessId": BASELINE_ID,
+                },
+            )
+            assert positional_position.status_code == 404
     finally:
         repository.close()

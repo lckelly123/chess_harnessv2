@@ -8,6 +8,10 @@ served by LM Studio. Optional LangSmith tracing records each agent turn.
 Named game folders are SQLite-backed collections: choose one before starting a
 match, filter the record ledger by folder, or refile an existing match afterward.
 
+
+cd C:\Repos\chess_harness_v2\chess_harnessv2\backend
+.\.venv\Scripts\langgraph.exe dev
+
 ## Run locally with Docker
 
 Prerequisites: Docker Desktop with Compose and an LM Studio server with one loaded
@@ -32,6 +36,7 @@ backend/
   app/                 FastAPI routes plus SQLite-backed match orchestration
   chess_core/          Deterministic position, scratchboard, inspection, and SEE logic
   harness/             Independent agent_player_1 and baseline graphs; shared transport/protocol
+  positional_testing/  Saved PGNs plus the one-turn API and CLI runner
   tests/               API, chess-core, graph, prompt-parity, and tracing tests
   Dockerfile           Python development and production stages
 frontend/
@@ -44,7 +49,7 @@ compose.yaml            Local two-service development stack
 PRODUCT.md              Product truth and scope
 ```
 
-The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, `backend/app`, `backend/chess_core`, and `backend/harness` (including its prompts). Test tooling stays in the test stage. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
+The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, `backend/app`, `backend/chess_core`, `backend/harness` (including its prompts), and `backend/positional_testing` (including saved PGNs). Test tooling stays in the test stage. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
 
 ## Agent Player 1
 
@@ -63,7 +68,7 @@ docker compose run --rm --no-deps -e LANGSMITH_TRACING=false backend python -m h
 For a live run, configure LM Studio and optional LangSmith credentials using
 [.env.example](.env.example). See [Agent Player 1 setup and migration
 notes](docs/agent-player-1.md). The web stack calls an agent only after a match is
-started through the UI or API.
+started or a saved positional test is explicitly run through the UI or API.
 
 ## Submit-only baseline
 
@@ -84,6 +89,31 @@ See [baseline setup and migration notes](docs/baseline.md). LangSmith Studio is 
 separate optional setup; UI-started match turns are traced without it. To inspect
 either production graph node by node in Studio, follow the
 [LangSmith Studio guide](docs/langsmith-studio.md).
+
+## Positional testing
+
+Open **Positional testing** in the web UI, select a PGN from
+`backend/positional_testing/positions`, choose Baseline or Agent Player 1, and
+click **Run once**. The backend asks that harness for one legal move and returns
+its proposed move, resolved model, justification, and any available phase reports
+without creating a match or changing the saved PGN.
+
+The same path has a clean CLI entrypoint. With the Docker stack running:
+
+```powershell
+docker compose exec backend python -m positional_testing --position before_queen_blunder --agent agent_player_1
+```
+
+Or run it from the backend virtual environment:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m positional_testing --position before_queen_blunder --agent agent_player_1
+```
+
+Use `--agent baseline` for the baseline harness. Both entrypoints use
+`LMSTUDIO_MODEL` when set; otherwise exactly one model must be loaded in LM
+Studio.
 
 ## Deterministic chess core
 

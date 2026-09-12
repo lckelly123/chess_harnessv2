@@ -1,12 +1,15 @@
-{% if forced_tool_retry.active %}
 # Forced Tool Call Retry
 
-The original phase input is unchanged. Your active reasoning from the previous pass is provided below for context:
+Your previous phase input remains in effect. Your active reasoning from the previous pass is provided below for context:
 
-{{ forced_tool_retry.fence }}text
-{{ forced_tool_retry.previous_output }}
-{{ forced_tool_retry.fence }}
+{{ fence }}text
+{{ previous_output }}
+{{ fence }}
 
+{% if correction %}
+Required protocol correction: {{ correction }}
+
+{% endif %}
 Do not continue reasoning. Call exactly one available tool now using the required tag:
 
 <agent_tool_call>
@@ -14,4 +17,3 @@ Do not continue reasoning. Call exactly one available tool now using the require
 </agent_tool_call>
 
 Output nothing after the closing tag.
-{% endif %}

@@ -80,6 +80,54 @@ export interface MatchList {
   total: number;
 }
 
+export interface PositionalTestPosition {
+  id: string;
+  name: string;
+  sourceFile: string;
+  white: string | null;
+  black: string | null;
+  sideToMove: PlayerColor;
+  moveCount: number;
+  position: PositionRecord;
+}
+
+export interface PositionalTestPositionList {
+  items: PositionalTestPosition[];
+}
+
+export interface RunPositionalTestInput {
+  positionId: string;
+  harnessId: string;
+}
+
+export interface PositionalTestMove {
+  san: string;
+  uci: string;
+  fromSquare: string;
+  toSquare: string;
+  promotion: string | null;
+  isCapture: boolean;
+  givesCheck: boolean;
+  isCastling: boolean;
+  isEnPassant: boolean;
+}
+
+export interface PositionalTestRun {
+  runId: string;
+  positionId: string;
+  positionName: string;
+  harnessId: string;
+  harnessName: string;
+  harnessVersion: string;
+  model: string;
+  side: PlayerColor;
+  ply: number;
+  move: PositionalTestMove;
+  justification: string;
+  defenseReport: string | null;
+  attackReport: string | null;
+}
+
 export interface StartMatchInput {
   whiteHarnessId: string;
   blackHarnessId: string;
@@ -95,4 +143,6 @@ export interface MatchApi {
   startMatch(input: StartMatchInput): Promise<MatchDetail>;
   stopMatch(matchId: string): Promise<MatchDetail>;
   assignMatchFolder(matchId: string, folderId: string | null): Promise<MatchDetail>;
+  listPositionalTestPositions(): Promise<PositionalTestPositionList>;
+  runPositionalTest(input: RunPositionalTestInput): Promise<PositionalTestRun>;
 }

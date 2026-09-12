@@ -56,4 +56,54 @@ describe("matchApi", () => {
       "/api/matches?query=&unfiled_only=true",
     );
   });
+
+  it("loads the saved positional-testing catalog", async () => {
+    const responseBody = { items: [{ id: "before_queen_blunder" }] };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await matchApi.listPositionalTestPositions();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/positional-testing/positions",
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
+    expect(response).toEqual(responseBody);
+  });
+
+  it("runs one selected harness turn against a saved position", async () => {
+    const responseBody = {
+      runId: "positional-test-fixed",
+      move: { san: "Qxe3+", uci: "d4e3" },
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await matchApi.runPositionalTest({
+      positionId: "before_queen_blunder",
+      harnessId: "agent-player-1-langgraph-v1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/positional-testing/runs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          positionId: "before_queen_blunder",
+          harnessId: "agent-player-1-langgraph-v1",
+        }),
+      }),
+    );
+    expect(response).toEqual(responseBody);
+  });
 });

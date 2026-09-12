@@ -1,46 +1,39 @@
-{% macro render_scan(scan) %}
-{% if scan.status == "game_over" %}
-Status: Unavailable. Game over: {{ scan.reason }}.
+{% if hypothetical_pass %}
+# Opponent Forcing Moves If {{ agent_side }} Passes ({{ board_label }})
+{% elif actor_role == "agent" %}
+# Agent Forcing Moves ({{ board_label }})
 {% else %}
-### Checks
+# Opponent Forcing Moves ({{ board_label }})
+{% endif %}
 
-{% if scan.checks %}
-{% for move in scan.checks %}
-- `{{ move.san }}`{% if move.agent_score_cp is not none %}: `{{ move.exchange_sequence | join(" ") }}` | `{% if move.agent_score_cp > 0 %}+{% endif %}{{ move.agent_score_cp }} cp`{% endif %}
+Moving side: {{ actor }} ({{ actor_role }}). {% if hypothetical_pass %}This scan assumes {{ agent_side }} passes and gives {{ actor }} the move.{% else %}This scan uses the side to move on the {{ board_name }}.{% endif %}
+
+Moves use SAN. After `:`, a capture shows its local SEE exchange sequence on the destination square. Outcome scores are always from {{ agent_side }}'s perspective: positive favors {{ agent_side }}, negative favors {{ opponent_side }}, and `100 cp` equals one pawn.
+
+{% if actor_role == "opponent" %}Opponent captures with a non-negative outcome are marked `SEE-cleared locally`; checks still require review for non-material consequences.{% endif %}
+
+{% if status == "in_check" %}
+Status: Deferred. The agent is currently in check, so it cannot legally pass and the opponent's checks and captures were not generated.
+{% elif status == "game_over" %}
+Status: Unavailable. Game over: {{ reason }}.
+{% else %}
+## Checks
+
+{% if checks %}
+{% for move in checks %}
+- `{{ move.san }}`{% if move.agent_score_cp is not none %}: `{{ move.exchange_sequence | join(" ") }}` | Outcome for {{ agent_side }}: `{% if move.agent_score_cp > 0 %}+{% endif %}{{ move.agent_score_cp }} cp`{% endif %}
 {% endfor %}
 {% else %}
 None.
 {% endif %}
 
-### Captures
+## Non-Checking Captures
 
-{% if scan.captures %}
-{% for move in scan.captures %}
-- `{{ move.san }}`: `{{ move.exchange_sequence | join(" ") }}` | `{% if move.agent_score_cp > 0 %}+{% endif %}{{ move.agent_score_cp }} cp`
+{% if captures %}
+{% for move in captures %}
+- `{{ move.san }}`: `{{ move.exchange_sequence | join(" ") }}` | Outcome for {{ agent_side }}: `{% if move.agent_score_cp > 0 %}+{% endif %}{{ move.agent_score_cp }} cp`{% if actor_role == "opponent" and move.agent_score_cp >= 0 %} | `SEE-cleared locally`{% endif %}
 {% endfor %}
 {% else %}
 None.
 {% endif %}
-{% endif %}
-{% endmacro %}
-# SEE Evaluation
-
-Each board is scanned for checks and non-checking captures available to its side to move. Moves use SAN. After `:`, a capturing move shows its local SEE exchange sequence on the destination square. Values are always from the agent's perspective in centipawns (`100 cp` = one pawn): positive is an agent gain and negative is an agent loss.
-
-## Canonical Board
-
-Side to move: {{ see_eval.canonical.actor }} ({{ see_eval.canonical.actor_role }})
-
-{{ render_scan(see_eval.canonical) }}
-
-## Scratchboard
-
-{% if see_eval.scratch_status == "unused" %}
-Status: unused
-{% else %}
-Status: active
-Moves from canonical: `{{ see_eval.scratch_moves | join(" ") }}`
-Side to move: {{ see_eval.scratch.actor }} ({{ see_eval.scratch.actor_role }})
-
-{{ render_scan(see_eval.scratch) }}
 {% endif %}

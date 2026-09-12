@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY chess_core ./chess_core
 COPY harness ./harness
+COPY positional_testing ./positional_testing
 
 FROM base AS test
 COPY pyproject.toml .

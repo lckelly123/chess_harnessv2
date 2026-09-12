@@ -7,6 +7,8 @@ from chess_core import STARTING_FEN
 from harness import studio
 from harness.agent_player_1 import AgentConfig
 from harness.agent_player_1 import build_graph as build_agent_player_1_graph
+from harness.agent_player_2 import AgentConfig as AgentPlayer2Config
+from harness.agent_player_2 import build_graph as build_agent_player_2_graph
 from harness.baseline import BaselineConfig
 from harness.baseline import build_graph as build_baseline_graph
 
@@ -38,6 +40,21 @@ def test_agent_player_1_studio_graph_accepts_public_turn_input(request_position)
         "synthesis",
     ]
     assert updates[-1]["synthesis"]["decision"]["move"] == "e4"
+
+
+def test_agent_player_2_studio_graph_accepts_public_turn_input(request_position):
+    graph = build_agent_player_2_graph(
+        ScriptedModel(finish()),
+        AgentPlayer2Config(model="test-model"),
+        accept_turn_input=True,
+    )
+
+    state = asyncio.run(graph.ainvoke(public_input(request_position)))
+
+    assert state["decision"]["move"] == "e4"
+    assert {"prepare_turn", "defense", "attack", "synthesis"} <= set(
+        graph.get_graph().nodes
+    )
 
 
 def test_baseline_studio_graph_accepts_public_turn_input(request_position):
@@ -79,12 +96,15 @@ def test_studio_introspection_builds_both_graphs_without_lmstudio(monkeypatch):
     async def inspect_graphs():
         async with studio.make_agent_player_1_graph(runtime) as phased:
             phased_nodes = set(phased.get_graph().nodes)
+        async with studio.make_agent_player_2_graph(runtime) as copied:
+            copied_nodes = set(copied.get_graph().nodes)
         async with studio.make_baseline_graph(runtime) as baseline:
             baseline_nodes = set(baseline.get_graph().nodes)
-        return phased_nodes, baseline_nodes
+        return phased_nodes, copied_nodes, baseline_nodes
 
-    phased_nodes, baseline_nodes = asyncio.run(inspect_graphs())
+    phased_nodes, copied_nodes, baseline_nodes = asyncio.run(inspect_graphs())
     assert {"prepare_turn", "defense", "attack", "synthesis"} <= phased_nodes
+    assert copied_nodes == phased_nodes
     assert {"prepare_turn", "decide", "validate_submission"} <= baseline_nodes
 
 

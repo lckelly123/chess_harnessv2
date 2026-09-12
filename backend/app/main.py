@@ -8,6 +8,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from harness.model import LMStudioModel
+from positional_testing.routes import router as positional_testing_router
+from positional_testing.runner import PositionalTestRunner
 
 from .matches.catalog import HarnessCatalog
 from .matches.manager import MatchManager, MatchSettings
@@ -39,6 +41,7 @@ def create_app(
 
         manager = MatchManager(active_repository, active_catalog, configured_settings)
         app.state.match_manager = manager
+        app.state.positional_test_runner = PositionalTestRunner(active_catalog)
         try:
             yield
         finally:
@@ -55,6 +58,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.include_router(router)
+    application.include_router(positional_testing_router)
     return application
 
 

@@ -31,9 +31,9 @@ def test_phase_order_and_context_isolation(request_position):
     state = run_state(model, request_position)
     assert state["canonical_fen"] == STARTING_FEN
     assert state["decision"]["move"] == "e4"  # Real board, not scratch (black to move).
-    assert "Status: active" in model.calls[1]["dynamic_input"]
+    assert "# Scratch Position" in model.calls[1]["dynamic_input"]
     for index in (0, 2, 4):
-        assert "Status: unused" in model.calls[index]["dynamic_input"]
+        assert "# Scratch Position" not in model.calls[index]["dynamic_input"]
         assert "No tool calls yet." in model.calls[index]["dynamic_input"]
     assert DEFENSE not in model.calls[2]["dynamic_input"]
     assert DEFENSE in model.calls[4]["dynamic_input"]
@@ -78,7 +78,7 @@ def test_rejected_scratch_move_keeps_position_and_history(request_position):
         [call("scratch_play_move", move="e5", justification=JUSTIFICATION), *finish()]
     )
     state = run_state(model, request_position)
-    assert "Status: unused" in model.calls[1]["dynamic_input"]
+    assert "# Scratch Position" not in model.calls[1]["dynamic_input"]
     assert "rejected" in model.calls[1]["dynamic_input"]
     assert "not legal" in model.calls[1]["dynamic_input"]
     assert state["canonical_fen"] == STARTING_FEN
@@ -96,8 +96,8 @@ def test_third_illegal_tool_fails_without_a_move(request_position):
 def test_bad_report_does_not_advance(request_position):
     model = ScriptedModel([call("submit_defense_report", report="bad"), *finish()])
     run_state(model, request_position)
-    assert "Phase 1" in model.calls[1]["dynamic_input"]
-    assert "Protocol Correction" in model.calls[1]["dynamic_input"]
+    assert "Phase 1" in model.calls[1]["instructions"]
+    assert "Required protocol correction" in model.calls[1]["dynamic_input"]
 
 
 def test_invalid_final_move_retries_synthesis(request_position):
@@ -111,7 +111,7 @@ def test_invalid_final_move_retries_synthesis(request_position):
     state = run_state(model, request_position)
     assert state["decision"]["move"] == "e4"
     assert "not legal" in model.calls[-1]["dynamic_input"]
-    assert "Phase 3" in model.calls[-1]["dynamic_input"]
+    assert "Phase 3" in model.calls[-1]["instructions"]
 
 
 @pytest.mark.parametrize(
@@ -173,7 +173,7 @@ def test_reusing_compiled_graph_does_not_reuse_turn_state(request_position):
 
     decision = asyncio.run(twice())
     assert decision.move.san == "e4"
-    assert "Status: unused" in model.calls[3]["dynamic_input"]
+    assert "# Scratch Position" not in model.calls[3]["dynamic_input"]
     assert "No tool calls yet." in model.calls[3]["dynamic_input"]
 
 

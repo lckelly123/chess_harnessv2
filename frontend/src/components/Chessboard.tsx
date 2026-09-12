@@ -43,27 +43,32 @@ interface ChessboardProps {
 export function Chessboard({ position, flipped }: ChessboardProps) {
   const squares = parseFen(position.fen);
   if (flipped) squares.reverse();
+  const rows = Array.from({ length: 8 }, (_, index) => squares.slice(index * 8, index * 8 + 8));
 
   return (
     <div className="board-shell">
       <div className="board" role="grid" aria-label={`Chess position after ${position.san}`}>
-        {squares.map((square) => {
-          const changed = square.coordinate === position.fromSquare || square.coordinate === position.toSquare;
-          const isEdgeFile = flipped ? square.coordinate[0] === "h" : square.coordinate[0] === "a";
-          const isEdgeRank = flipped ? square.coordinate[1] === "8" : square.coordinate[1] === "1";
-          return (
-            <div
-              className={`board-square ${square.isLight ? "board-square--light" : "board-square--dark"}${changed ? " board-square--changed" : ""}`}
-              key={square.coordinate}
-              role="gridcell"
-              aria-label={`${square.coordinate}${square.piece ? ` ${PIECE_LABELS[square.piece]}` : " empty"}`}
-            >
-              {square.piece ? <ChessPiece piece={square.piece} /> : null}
-              {isEdgeFile ? <span className="rank-label">{square.coordinate[1]}</span> : null}
-              {isEdgeRank ? <span className="file-label">{square.coordinate[0]}</span> : null}
-            </div>
-          );
-        })}
+        {rows.map((row) => (
+          <div className="board-row" role="row" key={row[0].coordinate}>
+            {row.map((square) => {
+              const changed = square.coordinate === position.fromSquare || square.coordinate === position.toSquare;
+              const isEdgeFile = flipped ? square.coordinate[0] === "h" : square.coordinate[0] === "a";
+              const isEdgeRank = flipped ? square.coordinate[1] === "8" : square.coordinate[1] === "1";
+              return (
+                <div
+                  className={`board-square ${square.isLight ? "board-square--light" : "board-square--dark"}${changed ? " board-square--changed" : ""}`}
+                  key={square.coordinate}
+                  role="gridcell"
+                  aria-label={`${square.coordinate}${square.piece ? ` ${PIECE_LABELS[square.piece]}` : " empty"}`}
+                >
+                  {square.piece ? <ChessPiece piece={square.piece} /> : null}
+                  {isEdgeFile ? <span className="rank-label">{square.coordinate[1]}</span> : null}
+                  {isEdgeRank ? <span className="file-label">{square.coordinate[0]}</span> : null}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

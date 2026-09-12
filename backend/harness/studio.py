@@ -8,8 +8,10 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 from langgraph_sdk.runtime import ServerRuntime
 
-from harness.agent_player_1 import AgentConfig
+from harness.agent_player_1 import AgentConfig as AgentPlayer1Config
 from harness.agent_player_1 import build_graph as build_agent_player_1_graph
+from harness.agent_player_2 import AgentConfig as AgentPlayer2Config
+from harness.agent_player_2 import build_graph as build_agent_player_2_graph
 from harness.baseline import BaselineConfig
 from harness.baseline import build_graph as build_baseline_graph
 from harness.model import LMStudioModel, resolve_lmstudio_model
@@ -43,8 +45,16 @@ def _model_name_for_introspection() -> str:
     return os.getenv("LMSTUDIO_MODEL", "").strip() or "loaded-lmstudio-model"
 
 
-def _agent_config(model_name: str) -> AgentConfig:
-    return AgentConfig(
+def _agent_player_1_config(model_name: str) -> AgentPlayer1Config:
+    return AgentPlayer1Config(
+        model=model_name,
+        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+        retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
+    )
+
+
+def _agent_player_2_config(model_name: str) -> AgentPlayer2Config:
+    return AgentPlayer2Config(
         model=model_name,
         reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
         retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
@@ -68,7 +78,7 @@ async def make_agent_player_1_graph(
     if runtime.execution_runtime is None:
         yield build_agent_player_1_graph(
             _INTROSPECTION_MODEL,
-            _agent_config(_model_name_for_introspection()),
+            _agent_player_1_config(_model_name_for_introspection()),
             accept_turn_input=True,
         )
         return
@@ -77,7 +87,32 @@ async def make_agent_player_1_graph(
     try:
         yield build_agent_player_1_graph(
             model,
-            _agent_config(model_name),
+            _agent_player_1_config(model_name),
+            accept_turn_input=True,
+        )
+    finally:
+        await model.aclose()
+
+
+@asynccontextmanager
+async def make_agent_player_2_graph(
+    runtime: ServerRuntime,
+) -> AsyncIterator[CompiledStateGraph]:
+    """Build Agent Player 2 for one Studio run and close its HTTP client."""
+
+    if runtime.execution_runtime is None:
+        yield build_agent_player_2_graph(
+            _INTROSPECTION_MODEL,
+            _agent_player_2_config(_model_name_for_introspection()),
+            accept_turn_input=True,
+        )
+        return
+
+    model, model_name = await _studio_model()
+    try:
+        yield build_agent_player_2_graph(
+            model,
+            _agent_player_2_config(model_name),
             accept_turn_input=True,
         )
     finally:

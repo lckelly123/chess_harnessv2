@@ -1,7 +1,7 @@
 # Tool History
 
-{% if tool_history.entries %}
-{% for entry in tool_history.entries %}
+{% if entries %}
+{% for entry in entries %}
 ## {{ loop.index }}. `{{ entry.tool }}`
 
 Justification: {{ entry.justification }}

@@ -6,7 +6,7 @@ Chess Harness v2 is a local, developer-facing observability console for autonomo
 
 ## Audience
 
-The primary user is the developer or researcher building the harness. They need to see what the backend decided, which harness version acted, how the position changed, and which trace events explain the move without operating the agents from the browser.
+The primary user is the developer or researcher building the harness. They need to see what the backend decided, which harness version acted, how the position changed, and which trace events explain the move. They can also invoke one agent turn against a curated position without starting a match.
 
 ## First surface
 
@@ -18,6 +18,7 @@ The first release is a React web interface served locally through Docker. It let
 - search previous matches;
 - create named game folders and file new or existing matches into them;
 - open and replay a completed match move by move.
+- open a saved PGN position, choose a harness, and request one proposed move.
 
 The current data source is a local SQLite-backed match runner. The UI talks only
 to a typed match API and polls authoritative snapshots while the selected agents
@@ -28,19 +29,21 @@ run in the background.
 - The backend is authoritative for match state, legal moves, results, and traces.
 - The frontend never chooses chess moves and exposes no human move controls.
 - Public UI events summarize match progress; detailed graph execution remains in LangSmith.
+- Positional-test results are transient one-turn responses; they do not create a match record or mutate the saved PGN.
 - The first release stays deliberately small: no authentication, tournaments, agent configuration editor, or trace mutation.
 - Harness selections are versioned identifiers, not editable prompts.
 - Stopping a match is the only destructive control and affects only the active local match.
 
 ## Information contract
 
-The frontend needs five backend-facing resources:
+The frontend needs six backend-facing resources:
 
 1. **Harness versions** — stable id, display name, version, and short description.
 2. **Game folders** — stable id, user-defined name, and match count for durable organization.
 3. **Match summary** — id, folder, players, status, result, timestamps, current FEN, move count, and last move.
 4. **Match detail** — the summary plus chronological positions/moves and structured trace events.
 5. **Match commands and updates** — start, stop, folder assignment, and polled snapshots with a possible future server-sent event stream.
+6. **Positional tests** — saved PGN summaries plus a one-turn command returning the selected harness, resolved model, proposed legal move, justification, and optional phase reports.
 
 Every trace event has a stable id, timestamp, ply, player, phase, status, short summary, and optional structured detail. The browser may format and filter these fields, but it does not infer hidden backend state.
 

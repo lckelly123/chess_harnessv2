@@ -6,13 +6,17 @@ import os
 from collections.abc import Awaitable, Callable
 
 from app.models import HarnessVersion
-from harness.agent_player_1 import AgentConfig, AgentPlayer1
+from harness.agent_player_1 import AgentConfig as AgentPlayer1Config
+from harness.agent_player_1 import AgentPlayer1
+from harness.agent_player_2 import AgentConfig as AgentPlayer2Config
+from harness.agent_player_2 import AgentPlayer2
 from harness.baseline import BaselineAgent, BaselineConfig
 from harness.contracts import PlayerHarness
 from harness.model import Model, resolve_lmstudio_model
 
 BASELINE_ID = "baseline-direct-submit-langgraph-v1"
 AGENT_PLAYER_1_ID = "agent-player-1-langgraph-v1"
+AGENT_PLAYER_2_ID = "agent-player-2-langgraph-v1"
 
 HARNESSES = (
     HarnessVersion(
@@ -26,6 +30,12 @@ HARNESSES = (
         name="Agent Player 1",
         version="agent-player-1-langgraph-v1",
         summary="Defense, attack, and synthesis phases with deterministic tools.",
+    ),
+    HarnessVersion(
+        id=AGENT_PLAYER_2_ID,
+        name="Agent Player 2",
+        version="agent-player-2-langgraph-v1",
+        summary="Independent copy of Agent Player 1 for further iteration.",
     ),
 )
 
@@ -68,6 +78,17 @@ class HarnessCatalog:
             model_name,
         )
 
+    async def create_player(
+        self,
+        harness_id: str,
+        cancellation_check: Callable[[], bool],
+    ) -> tuple[PlayerHarness, str]:
+        """Resolve one model and construct one harness for a single turn."""
+
+        self.definition(harness_id)
+        model_name = await self._model_resolver()
+        return self._create(harness_id, model_name, cancellation_check), model_name
+
     def _create(
         self,
         harness_id: str,
@@ -89,7 +110,17 @@ class HarnessCatalog:
         if harness_id == AGENT_PLAYER_1_ID:
             return AgentPlayer1(
                 self._model,
-                AgentConfig(
+                AgentPlayer1Config(
+                    model=model_name,
+                    reasoning_effort=reasoning,
+                    retry_reasoning_effort=retry_reasoning,
+                ),
+                cancellation_check,
+            )
+        if harness_id == AGENT_PLAYER_2_ID:
+            return AgentPlayer2(
+                self._model,
+                AgentPlayer2Config(
                     model=model_name,
                     reasoning_effort=reasoning,
                     retry_reasoning_effort=retry_reasoning,

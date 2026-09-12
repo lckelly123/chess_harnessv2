@@ -5,6 +5,9 @@ import type {
   MatchApi,
   MatchDetail,
   MatchList,
+  PositionalTestPositionList,
+  PositionalTestRun,
+  RunPositionalTestInput,
   StartMatchInput,
 } from "./contracts";
 
@@ -58,5 +61,12 @@ export const matchApi: MatchApi = {
     request<MatchDetail>(`/api/matches/${encodeURIComponent(matchId)}/folder`, {
       method: "PATCH",
       body: JSON.stringify({ folderId }),
+    }),
+  listPositionalTestPositions: () =>
+    request<PositionalTestPositionList>("/api/positional-testing/positions"),
+  runPositionalTest: (input: RunPositionalTestInput) =>
+    request<PositionalTestRun>("/api/positional-testing/runs", {
+      method: "POST",
+      body: JSON.stringify(input),
     }),
 };

@@ -3,6 +3,7 @@
   "dependencies": ["."],
   "graphs": {
     "agent_player_1": "./harness/studio.py:make_agent_player_1_graph",
+    "agent_player_2": "./harness/studio.py:make_agent_player_2_graph",
     "baseline": "./harness/studio.py:make_baseline_graph"
   },
   "env": "../.env"

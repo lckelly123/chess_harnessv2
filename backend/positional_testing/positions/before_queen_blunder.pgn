@@ -1,0 +1,11 @@
+[Event "Agent Player 1 Queen Blunder Test"]
+[Site "LangSmith"]
+[Date "2026.09.10"]
+[Round "-"]
+[White "Baseline"]
+[Black "Agent Player 1"]
+[Result "*"]
+
+1. e4 Nf6 2. Nf3 Nxe4 3. Qe2 Nc5 4. d4 Nca6 5. Nc3 Nc6
+6. d5 Ncb4 7. Nd4 Nc6 8. Qxa6 bxa6 9. dxc6 dxc6
+10. Bxa6 Qxd4 11. Bxc8 Rxc8 12. Be3 *

@@ -1,6 +1,6 @@
 # Frontend ↔ backend contract
 
-The browser is a spectator and controller for match lifecycle. It never decides a chess move, validates legality, advances a clock, computes a result, or invents a trace. Those are backend responsibilities.
+The browser is a spectator and controller for match lifecycle and one-turn positional tests. It never decides a chess move, validates legality, advances a clock, computes a result, or invents a trace. Those are backend responsibilities.
 
 ## What crosses the boundary
 
@@ -15,8 +15,11 @@ The browser is a spectator and controller for match lifecycle. It never decides 
 | Backend → frontend | Ordered trace events with ply, player, phase, status, summary, and detail | Explain what the harness was doing at each point. |
 | Frontend → backend | Match id to stop | Request cancellation of the active run. The backend decides the terminal state. |
 | Frontend → backend | Search text and optional folder filter | Filter previous match records. |
+| Backend → frontend | Saved PGN summaries and final board snapshots | Let the user inspect curated positions without parsing chess data in React. |
+| Frontend → backend | Saved position id and harness id | Request exactly one harness turn without creating a match. |
+| Backend → frontend | Proposed move, resolved model, justification, and optional phase reports | Present the authoritative one-turn result while leaving the saved board unchanged. |
 
-The TypeScript source of truth for the client is [`frontend/src/api/contracts.ts`](../frontend/src/api/contracts.ts). The equivalent API models live in [`backend/app/models.py`](../backend/app/models.py).
+The TypeScript source of truth for the client is [`frontend/src/api/contracts.ts`](../frontend/src/api/contracts.ts). Match API models live in [`backend/app/models.py`](../backend/app/models.py), while positional-test models live in [`backend/positional_testing/models.py`](../backend/positional_testing/models.py).
 
 ## HTTP surface
 
@@ -31,6 +34,8 @@ The TypeScript source of truth for the client is [`frontend/src/api/contracts.ts
 | `POST` | `/api/matches` | Creates a match in an optional folder and starts its background runner. |
 | `PATCH` | `/api/matches/{matchId}/folder` | Moves a match into a folder or back to Unfiled. |
 | `POST` | `/api/matches/{matchId}/stop` | Cancels the runner and prevents a late move commit. |
+| `GET` | `/api/positional-testing/positions` | Returns selectable final positions parsed from saved PGNs. |
+| `POST` | `/api/positional-testing/runs` | Invokes the selected harness once and returns its move and reports. It does not persist a match or modify the PGN. |
 
 FastAPI also exposes an interactive schema at [http://localhost:8000/docs](http://localhost:8000/docs) while the Docker stack is running.
 
@@ -43,3 +48,5 @@ provider responses, or the LangSmith API key.
 
 Polling remains the deliberate first transport. SSE or WebSockets can be added
 later if node-level live progress is worth the extra reconnect and ordering logic.
+Positional runs are synchronous one-turn requests; detailed execution remains in
+LangSmith and the browser receives only the completed public result.

@@ -22,6 +22,7 @@ services:
       - ./backend/app:/app/app
       - ./backend/chess_core:/app/chess_core
       - ./backend/harness:/app/harness
+      - ./backend/positional_testing:/app/positional_testing
       - backend_data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
