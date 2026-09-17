@@ -168,15 +168,18 @@ def load_manifest(path: Path, phase: str) -> PromptManifest:
         messages.append(MessageSpec(role=role, sections=sections))
 
     if [message.role for message in messages] != ["system", "user"]:
-        raise ValueError("Manifest must declare one system message, then one user message.")
+        raise ValueError(
+            "Manifest must declare one system message, then one user message."
+        )
     phase_root = path.parent.resolve()
     for message in messages:
         for section in message.sections:
             template_path = (phase_root / section.template).resolve()
-            if not template_path.is_relative_to(phase_root) or not template_path.is_file():
+            if (
+                not template_path.is_relative_to(phase_root)
+                or not template_path.is_file()
+            ):
                 raise ValueError(
                     f"Prompt template does not exist inside its phase: {section.template}"
                 )
-            if section.provider == "phase_reports" and phase != "synthesis":
-                raise ValueError("phase_reports may only be used in synthesis.")
     return PromptManifest(version=2, phase=phase, messages=tuple(messages))

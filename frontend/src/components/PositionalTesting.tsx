@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { matchApi } from "../api/client";
 import type {
   HarnessVersion,
+  ModelSelection,
   PositionRecord,
   PositionalTestPosition,
   PositionalTestRun,
@@ -28,7 +29,13 @@ function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-export function PositionalTesting() {
+interface PositionalTestingProps {
+  modelSelection: ModelSelection;
+  running: boolean;
+  onRunningChange: (running: boolean) => void;
+}
+
+export function PositionalTesting({ modelSelection, running, onRunningChange }: PositionalTestingProps) {
   const [positions, setPositions] = useState<PositionalTestPosition[]>([]);
   const [harnesses, setHarnesses] = useState<HarnessVersion[]>([]);
   const [selectedPositionId, setSelectedPositionId] = useState("");
@@ -37,7 +44,6 @@ export function PositionalTesting() {
   const [error, setError] = useState<string | null>(null);
   const [harnessLoading, setHarnessLoading] = useState(true);
   const [harnessError, setHarnessError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<PositionalTestRun | null>(null);
 
@@ -125,19 +131,20 @@ export function PositionalTesting() {
 
   const runOnce = async () => {
     if (!selectedPosition || !selectedHarness || running) return;
-    setRunning(true);
+    onRunningChange(true);
     setRunError(null);
     setRunResult(null);
     try {
       const result = await matchApi.runPositionalTest({
         positionId: selectedPosition.id,
         harnessId: selectedHarness.id,
+        modelSelection,
       });
       setRunResult(result);
     } catch (caught) {
       setRunError(caught instanceof Error ? caught.message : "The positional test could not be completed.");
     } finally {
-      setRunning(false);
+      onRunningChange(false);
     }
   };
 

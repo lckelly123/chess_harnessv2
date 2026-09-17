@@ -93,7 +93,11 @@ class AgentPlayer1:
             "run_name": "agent_player_1_turn",
             # Each phase can run a model node and a tool node per model pass.
             "recursion_limit": 6 * self.config.max_model_calls + 10,
-            "tags": ["agent_player_1", "lmstudio", self.config.prompt_version],
+            "tags": [
+                "agent_player_1",
+                self.config.provider,
+                self.config.prompt_version,
+            ],
             "metadata": {
                 "game_id": request.game_id,
                 "thread_id": request.game_id,
@@ -102,6 +106,7 @@ class AgentPlayer1:
                 "side": request.side,
                 "harness_version": self.config.prompt_version,
                 "model": self.config.model,
+                "provider": self.config.provider,
             },
         }
 

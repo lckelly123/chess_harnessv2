@@ -18,10 +18,6 @@ messages:
           source: canonical
           include_scratch_moves: false
 
-      - id: phase_reports
-        template: user/phase_reports.md
-        provider: phase_reports
-
       - id: scratch_board_state
         template: user/board_state.md
         provider: board_state
@@ -32,9 +28,13 @@ messages:
           source: scratch
           include_scratch_moves: true
 
-      - id: tool_history
-        template: user/tool_history.md
-        provider: tool_history
+      - id: running_thoughts
+        template: user/running_thoughts.md
+        provider: running_thoughts
+
+      - id: tested_lines
+        template: user/tested_lines.md
+        provider: tested_lines
 
       - id: forced_tool_retry
         template: user/forced_tool_retry.md

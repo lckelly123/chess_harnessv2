@@ -6,6 +6,40 @@ afterEach(() => {
 });
 
 describe("matchApi", () => {
+  it.each(["qwen", "gpt-luna"] as const)("includes the requested %s model and medium reasoning on new runs", async (modelId) => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ id: "request-only" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    const modelSelection = { modelId, reasoningEffort: "medium" as const };
+    const matchInput = {
+      whiteHarnessId: "agent-player-2-langgraph-v1",
+      blackHarnessId: "baseline-direct-submit-langgraph-v1",
+      folderId: null,
+      modelSelection,
+    };
+    const positionInput = {
+      positionId: "before_queen_blunder",
+      harnessId: "agent-player-2-langgraph-v1",
+      modelSelection,
+    };
+
+    await matchApi.startMatch(matchInput);
+    await matchApi.runPositionalTest(positionInput);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/matches", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify(matchInput),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/positional-testing/runs", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify(positionInput),
+    }));
+  });
+
   it("sends the typed start-match contract as camelCase JSON", async () => {
     const responseBody = { id: "match-test", status: "running" };
     const fetchMock = vi.fn().mockResolvedValue(

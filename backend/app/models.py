@@ -106,10 +106,18 @@ class MatchList(ApiModel):
     total: int
 
 
+class ModelSelection(ApiModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: Literal["qwen", "gpt-luna"]
+    reasoning_effort: Literal["medium"] = "medium"
+
+
 class StartMatchRequest(ApiModel):
     white_harness_id: str
     black_harness_id: str
     folder_id: str | None = None
+    model_selection: ModelSelection | None = None
 
 
 class HealthResponse(ApiModel):

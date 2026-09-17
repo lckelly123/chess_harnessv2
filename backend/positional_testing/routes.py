@@ -37,6 +37,7 @@ async def run_saved_position(
         return await _runner(request).run_once(
             request_body.position_id,
             request_body.harness_id,
+            model_selection=request_body.model_selection,
         )
     except UnknownSavedPositionError as exc:
         raise HTTPException(

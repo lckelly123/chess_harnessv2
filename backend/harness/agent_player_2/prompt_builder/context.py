@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -21,6 +20,7 @@ from chess_core import (
 )
 
 from ..state import TurnState
+from ..tested_lines import base_verification_done, preorder
 
 PIECE_GROUPS = (
     (chess.KING, "King", "King"),
@@ -38,13 +38,12 @@ PIECE_VALUES = {
     chess.QUEEN: 900,
     chess.KING: 0,
 }
-TOOL_HISTORY_LIMIT = 7
 PROVIDER_PARAMETER_NAMES = {
     "board_state": frozenset({"source", "include_scratch_moves"}),
     "see_eval": frozenset({"source", "actor", "score_perspective"}),
-    "tool_history": frozenset(),
+    "running_thoughts": frozenset(),
+    "tested_lines": frozenset(),
     "forced_tool_retry": frozenset(),
-    "phase_reports": frozenset(),
 }
 
 
@@ -108,17 +107,34 @@ class SeeEvalContext:
 
 
 @dataclass(frozen=True, slots=True)
-class ToolHistoryEntry:
+class LatestToolResult:
     tool: str
-    justification: str
-    arguments_json: str
-    status: str | None
-    result_summary: str | None
+    ok: bool
+    result_summary: str
 
 
 @dataclass(frozen=True, slots=True)
-class ToolHistoryContext:
-    entries: tuple[ToolHistoryEntry, ...]
+class RunningThoughtsContext:
+    working_notes: str
+    latest_results: tuple[LatestToolResult, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TestedLineEntry:
+    heading: str
+    branch_id: str
+    ply: int
+    actor_label: str
+    move: str
+    material_change: str
+    annotation: str
+    verification: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class TestedLinesContext:
+    agent_side: str
+    entries: tuple[TestedLineEntry, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,14 +337,6 @@ def _canonical_board_context(state: TurnState, phase: str) -> BoardStateContext:
     )
 
 
-def build_attack_board_state_context(state: TurnState) -> BoardStateContext:
-    return _canonical_board_context(state, "attack")
-
-
-def build_defense_board_state_context(state: TurnState) -> BoardStateContext:
-    return _canonical_board_context(state, "defense")
-
-
 def build_synthesis_board_state_context(state: TurnState) -> BoardStateContext:
     return _canonical_board_context(state, "synthesis")
 
@@ -404,7 +412,9 @@ def build_see_eval_context(
 
     if actor == "agent":
         if board.turn != agent_color:
-            raise ValueError("Agent SEE scan requires the agent to be the side to move.")
+            raise ValueError(
+                "Agent SEE scan requires the agent to be the side to move."
+            )
         scan = scan_agent_forcing_moves(board.fen())
     elif actor == "opponent_after_pass":
         if board.turn != agent_color:
@@ -428,28 +438,6 @@ def build_see_eval_context(
     )
 
 
-def build_attack_see_eval_context(state: TurnState) -> SeeEvalContext:
-    if state["phase"] != "attack":
-        raise ValueError("Attack SEE evaluation requires attack phase state.")
-    return build_see_eval_context(
-        state,
-        source="canonical",
-        actor="agent",
-        score_perspective="agent",
-    )
-
-
-def build_defense_see_eval_context(state: TurnState) -> SeeEvalContext:
-    if state["phase"] != "defense":
-        raise ValueError("Defense SEE evaluation requires defense phase state.")
-    return build_see_eval_context(
-        state,
-        source="canonical",
-        actor="opponent_after_pass",
-        score_perspective="agent",
-    )
-
-
 def build_synthesis_see_eval_context(state: TurnState) -> SeeEvalContext:
     if state["phase"] != "synthesis":
         raise ValueError("Synthesis SEE evaluation requires synthesis phase state.")
@@ -461,31 +449,49 @@ def build_synthesis_see_eval_context(state: TurnState) -> SeeEvalContext:
     )
 
 
-def build_tool_history_context(state: TurnState) -> ToolHistoryContext:
-    """Build the visible window of tool calls for the current phase."""
+def build_running_thoughts_context(state: TurnState) -> RunningThoughtsContext:
+    """Combine model-owned notes with the newest harness-owned tool batch."""
 
-    visible = [
-        event for event in state["history"] if event.get("type") == "tool_call"
-    ][-TOOL_HISTORY_LIMIT:]
+    return RunningThoughtsContext(
+        working_notes=state["running_thoughts"],
+        latest_results=tuple(
+            LatestToolResult(
+                tool=str(result.get("tool", "")),
+                ok=bool(result.get("ok")),
+                result_summary=str(result.get("result_summary", "")),
+            )
+            for result in state["latest_tool_results"]
+        ),
+    )
+
+
+def build_tested_lines_context(state: TurnState) -> TestedLinesContext:
+    """Render the persistent scratch variation tree in deterministic order."""
+
+    agent_side = state["side"].capitalize()
     entries = []
-    for event in visible:
-        ok = event.get("ok")
-        status = "success" if ok is True else "rejected" if ok is False else None
-        summary = event.get("result_summary")
+    for node in preorder(state["tested_lines"]):
+        material_change = node["material_change_cp"]
+        verification = None
+        if node["parent_id"] is None:
+            verification = (
+                "Done"
+                if base_verification_done(state["tested_lines"], node["branch_id"])
+                else "1/2 halfmoves tested"
+            )
         entries.append(
-            ToolHistoryEntry(
-                tool=str(event.get("tool", "")),
-                justification=str(event.get("justification", "")),
-                arguments_json=json.dumps(
-                    event.get("arguments") or {},
-                    ensure_ascii=False,
-                    indent=2,
-                ),
-                status=status,
-                result_summary=str(summary) if summary else None,
+            TestedLineEntry(
+                heading="#" * (node["ply"] + 1),
+                branch_id=node["branch_id"],
+                ply=node["ply"],
+                actor_label=f"{node['actor'].capitalize()} ({node['side'].capitalize()})",
+                move=node["move"],
+                material_change=(f"{material_change:+d}" if material_change else "0"),
+                annotation=node["annotation"] or "None yet",
+                verification=verification,
             )
         )
-    return ToolHistoryContext(entries=tuple(entries))
+    return TestedLinesContext(agent_side=agent_side, entries=tuple(entries))
 
 
 def build_forced_tool_retry_context(state: TurnState) -> ForcedToolRetryContext:
@@ -570,12 +576,20 @@ def _see_eval_provider(
     )
 
 
-def _tool_history_provider(
+def _tested_lines_provider(
     state: TurnState,
     parameters: Mapping[str, Any],
 ) -> dict[str, Any]:
-    _require_parameters("tool_history", parameters, set())
-    return asdict(build_tool_history_context(state))
+    _require_parameters("tested_lines", parameters, set())
+    return asdict(build_tested_lines_context(state))
+
+
+def _running_thoughts_provider(
+    state: TurnState,
+    parameters: Mapping[str, Any],
+) -> dict[str, Any]:
+    _require_parameters("running_thoughts", parameters, set())
+    return asdict(build_running_thoughts_context(state))
 
 
 def _forced_tool_retry_provider(
@@ -586,28 +600,15 @@ def _forced_tool_retry_provider(
     return asdict(build_forced_tool_retry_context(state))
 
 
-def _phase_reports_provider(
-    state: TurnState,
-    parameters: Mapping[str, Any],
-) -> dict[str, Any]:
-    _require_parameters("phase_reports", parameters, set())
-    if state["phase"] != "synthesis":
-        raise ValueError("Phase reports are available only during synthesis.")
-    return {
-        "defense_report": state["defense_report"],
-        "attack_report": state["attack_report"],
-    }
-
-
 PROVIDERS: dict[
     str,
     Callable[[TurnState, Mapping[str, Any]], dict[str, Any]],
 ] = {
     "board_state": _board_state_provider,
     "see_eval": _see_eval_provider,
-    "tool_history": _tool_history_provider,
+    "running_thoughts": _running_thoughts_provider,
+    "tested_lines": _tested_lines_provider,
     "forced_tool_retry": _forced_tool_retry_provider,
-    "phase_reports": _phase_reports_provider,
 }
 
 

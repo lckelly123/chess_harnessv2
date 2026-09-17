@@ -4,21 +4,23 @@ from collections.abc import Callable
 
 from harness.contracts import HarnessError, TurnCancelled
 from harness.model import Model, visible_output
-from harness.protocol import parse_tool_call
+from harness.protocol import ToolProtocolError
 
 from .config import AgentConfig
 from .prompt_builder import build_prompt
-from .state import Phase, TurnState, phase_state
+from .protocol import parse_agent_response
+from .state import Phase, TurnState
 from .tools import (
+    ANNOTATION_TOOLS,
     TERMINAL_TOOLS,
-    ToolProtocolError,
     ToolRejected,
     execute_tool,
     validate_arguments,
+    validate_tool_batch,
 )
 
 
-class PhaseNodes:
+class SynthesisNodes:
     def __init__(
         self,
         model: Model,
@@ -46,7 +48,7 @@ class PhaseNodes:
             **state,
             "protocol_errors": errors,
             "correction": message,
-            "pending_tool": None,
+            "pending_tools": [],
             "next_step": state["phase"],
             "forced_retry": True,
             # Keep the original reasoning when a subsequent forced pass is empty.
@@ -103,12 +105,17 @@ class PhaseNodes:
             raise HarnessError(f"LM Studio response status: {response['status']}.")
         exposed = "\n\n".join(value for value in (reasoning, text) if value)
         try:
-            call = parse_tool_call(text)
-            call["arguments"] = validate_arguments(
-                phase, call["tool"], call["arguments"]
-            )
+            parsed = parse_agent_response(text)
+            calls = []
+            for parsed_call in parsed.tool_calls:
+                call = dict(parsed_call)
+                call["arguments"] = validate_arguments(
+                    phase, call["tool"], call["arguments"]
+                )
+                calls.append(call)
+            validate_tool_batch(calls)
         except ToolProtocolError as exc:
-            reasoning_only = bool(exposed) and "<agent_tool_call>" not in text
+            reasoning_only = bool(exposed) and "<agent_tool_calls>" not in text
             details = response.get("incomplete_details") or {}
             usage = response.get("usage") or {}
             reasoning_tokens = (usage.get("output_tokens_details") or {}).get(
@@ -128,10 +135,14 @@ class PhaseNodes:
                 protocol_error=not reasoning_only,
                 trigger=trigger,
             )
-        if state["tool_calls"] >= self.config.max_tool_calls:
+        if state["tool_calls"] + len(calls) > self.config.max_tool_calls:
             raise HarnessError(f"{phase} exceeded its tool-call limit.")
-        current.update(pending_tool=call, tool_calls=state["tool_calls"] + 1)
-        if call["tool"] == TERMINAL_TOOLS[phase]:
+        current.update(
+            running_thoughts=parsed.running_thoughts,
+            pending_tools=calls,
+            tool_calls=state["tool_calls"] + len(calls),
+        )
+        if any(call["tool"] == TERMINAL_TOOLS[phase] for call in calls):
             # Terminal tool validation is part of the submission edge; it has
             # its own LangSmith tool span without another orchestration loop.
             return self._execute(current)
@@ -139,91 +150,130 @@ class PhaseNodes:
 
     def _execute(self, state: TurnState):
         self._check_cancelled()
-        call = state["pending_tool"]
-        if call is None:
-            raise HarnessError("Tool node has no pending tool call.")
-        event = {
-            "type": "tool_call",
-            "phase": state["phase"],
-            "tool": call["tool"],
-            "justification": call["arguments"].get("justification", ""),
-            "arguments": {
-                k: v for k, v in call["arguments"].items() if k != "justification"
-            },
-        }
+        calls = state["pending_tools"]
+        if not calls:
+            raise HarnessError("Tool node has no pending tool calls.")
+
+        indexed_calls = list(enumerate(calls))
+        ordered_calls = sorted(
+            indexed_calls,
+            key=lambda item: item[1]["tool"] not in ANNOTATION_TOOLS,
+        )
+        scratch_moves = list(state["scratch_moves"])
+        tested_lines = state["tested_lines"]
+        active_branch_id = state["active_branch_id"]
+        attempted_events = []
+        decision = None
         try:
-            result = execute_tool(
-                phase=state["phase"],
-                name=call["tool"],
-                arguments=call["arguments"],
-                canonical_fen=state["canonical_fen"],
-                side=state["side"],
-                scratch_moves=state["scratch_moves"],
-                langsmith_extra={"name": call["tool"]},
-            )
+            for batch_index, call in ordered_calls:
+                event = {
+                    "type": "tool_call",
+                    "phase": state["phase"],
+                    "batch_index": batch_index,
+                    "tool": call["tool"],
+                    "running_thoughts": state["running_thoughts"],
+                    "arguments": dict(call["arguments"]),
+                }
+                result = execute_tool(
+                    phase=state["phase"],
+                    name=call["tool"],
+                    arguments=call["arguments"],
+                    canonical_fen=state["canonical_fen"],
+                    side=state["side"],
+                    scratch_moves=scratch_moves,
+                    tested_lines=tested_lines,
+                    active_branch_id=active_branch_id,
+                    langsmith_extra={"name": call["tool"]},
+                )
+                scratch_moves = result["scratch_moves"]
+                tested_lines = result["tested_lines"]
+                active_branch_id = result["active_branch_id"]
+                decision = result.get("decision", decision)
+                event.update(
+                    ok=True,
+                    result=result.get("result", {"decision": result.get("decision")}),
+                    result_summary=result.get("result_summary", "Submission accepted."),
+                )
+                attempted_events.append(event)
+                self._check_cancelled()
         except ToolRejected as exc:
             rejected = state["rejected_calls"] + 1
             if rejected >= self.config.max_failed_tool_calls:
                 raise HarnessError(
                     f"{state['phase']} reached its rejected-tool limit: {exc}"
                 ) from exc
-            event.update(ok=False, result_summary=str(exc))
+            rollback_summary = f"Rolled back because the tool batch was rejected: {exc}"
+            rolled_back = [
+                {
+                    **event,
+                    "ok": False,
+                    "rolled_back": True,
+                    "result_summary": rollback_summary,
+                }
+                for event in attempted_events
+            ]
+            failed_event = {
+                "type": "tool_call",
+                "phase": state["phase"],
+                "batch_index": batch_index,
+                "tool": call["tool"],
+                "running_thoughts": state["running_thoughts"],
+                "arguments": dict(call["arguments"]),
+                "ok": False,
+                "result_summary": str(exc),
+            }
+            batch_events = [*rolled_back, failed_event]
+            batch_events.sort(key=lambda event: event["batch_index"])
             return {
                 **state,
                 "rejected_calls": rejected,
-                "pending_tool": None,
+                "pending_tools": [],
                 "next_step": state["phase"],
-                "history": [*state["history"], event][
+                "latest_tool_results": [
+                    {
+                        "tool": event["tool"],
+                        "ok": False,
+                        "result_summary": event["result_summary"],
+                    }
+                    for event in batch_events
+                ],
+                "history": [*state["history"], *batch_events][
                     -self.config.history_event_limit :
                 ],
-                "events": [*state["events"], event],
+                "events": [*state["events"], *batch_events],
                 "correction": "",
             }
-        self._check_cancelled()
-        event.update(
-            ok=True,
-            result=result,
-            result_summary=result.get("result_summary", "Submission accepted."),
-        )
+
+        attempted_events.sort(key=lambda event: event["batch_index"])
         current = {
             **state,
-            "pending_tool": None,
+            "pending_tools": [],
+            "scratch_moves": scratch_moves,
+            "tested_lines": tested_lines,
+            "active_branch_id": active_branch_id,
+            "latest_tool_results": [
+                {
+                    "tool": event["tool"],
+                    "ok": True,
+                    "result_summary": event["result_summary"],
+                }
+                for event in attempted_events
+            ],
             "forced_retry": False,
             "forced_retries": 0,
             "retry_output": "",
             "correction": "",
-            "events": [*state["events"], event],
+            "history": [*state["history"], *attempted_events][
+                -self.config.history_event_limit :
+            ],
+            "events": [*state["events"], *attempted_events],
         }
-        if result["terminal"]:
-            if state["phase"] == "synthesis":
-                return {**current, "decision": result["decision"], "next_step": "end"}
-            next_phase = "attack" if state["phase"] == "defense" else "synthesis"
-            return {
-                **current,
-                **phase_state(next_phase),
-                f"{state['phase']}_report": result["report"],
-            }
-        return {
-            **current,
-            "scratch_moves": result["scratch_moves"],
-            "next_step": state["phase"],
-            "history": [*state["history"], event][-self.config.history_event_limit :],
-        }
-
-    async def defense(self, state: TurnState):
-        return await self._model_pass("defense", state)
-
-    async def attack(self, state: TurnState):
-        return await self._model_pass("attack", state)
+        if decision is not None:
+            return {**current, "decision": decision, "next_step": "end"}
+        return {**current, "next_step": state["phase"]}
 
     async def synthesis(self, state: TurnState):
         return await self._model_pass("synthesis", state)
-
-    def defense_tools(self, state: TurnState):
-        return self._execute(state)
-
-    def attack_tools(self, state: TurnState):
-        return self._execute(state)
 
     def synthesis_tools(self, state: TurnState):
         return self._execute(state)

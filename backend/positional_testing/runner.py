@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.matches.catalog import HarnessCatalog
+from app.models import ModelSelection
 from harness.contracts import TurnRequest
 
 from .catalog import POSITION_DIRECTORY, get_saved_position
@@ -36,6 +37,7 @@ class PositionalTestRunner:
         self,
         position_id: str,
         harness_id: str,
+        model_selection: ModelSelection | None = None,
     ) -> SavedPositionRun:
         document = get_saved_position(position_id, self._position_directory)
         if document is None:
@@ -45,6 +47,7 @@ class PositionalTestRunner:
         player, model_name = await self._catalog.create_player(
             harness_id,
             lambda: False,
+            model_selection=model_selection,
         )
         position = document.position
         run_id = self._id_factory()

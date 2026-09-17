@@ -23,30 +23,49 @@ class DemoModel:
             [
                 None,
                 (
-                    "scratch_play_move",
-                    {
-                        "move": "e4",
-                        "justification": "Test whether e4 permits a forcing reply before preparing the defensive report.",
-                    },
+                    "e4 is a candidate central advance, but its immediate reply is untested. I will play e4 on the scratchboard to inspect the resulting position.",
+                    [
+                        {
+                            "tool": "scratch_play_move",
+                            "arguments": {"move": "e4"},
+                        }
+                    ],
                 ),
                 (
-                    "submit_defense_report",
-                    {
-                        "report": "Severity: None. No immediate defensive obligation was found in this scripted demonstration."
-                    },
+                    "e4 is now branch B1. I will record its purpose and test Black's e5 reply.",
+                    [
+                        {
+                            "tool": "annotate_branch",
+                            "arguments": {
+                                "branch_id": "B1",
+                                "annotation": "e4 claims central space; Black's reply is being tested.",
+                            },
+                        },
+                        {
+                            "tool": "scratch_play_move",
+                            "arguments": {"move": "e5"},
+                        },
+                    ],
                 ),
                 (
-                    "submit_attack_report",
-                    {
-                        "report": "Opportunity: None. No forcing opportunity was established in this scripted demonstration."
-                    },
-                ),
-                (
-                    "submit_move",
-                    {
-                        "move": "e4",
-                        "justification": "The scripted example chooses e4 to demonstrate the final legal-move submission.",
-                    },
+                    "The tested branch now includes Black's legal e5 reply, so the scripted demonstration can submit e4.",
+                    [
+                        {
+                            "tool": "annotate_branch",
+                            "arguments": {
+                                "branch_id": "B1.1",
+                                "annotation": "Black answers symmetrically with e5; no immediate material change occurs.",
+                            },
+                        },
+                        {
+                            "tool": "submit_move",
+                            "arguments": {
+                                "move": "e4",
+                                "tested_branch": "B1",
+                                "decision_summary": "The scripted example chooses e4 after testing the legal e5 reply on branch B1.",
+                            },
+                        },
+                    ],
                 ),
             ]
         )
@@ -57,9 +76,11 @@ class DemoModel:
             "Consider whether a central pawn move exposes an immediate threat."
             if item is None
             else (
-                "<agent_tool_call>"
-                + json.dumps({"tool": item[0], "arguments": item[1]})
-                + "</agent_tool_call>"
+                "<running_thoughts>"
+                + item[0]
+                + "</running_thoughts>\n\n<agent_tool_calls>"
+                + json.dumps(item[1])
+                + "</agent_tool_calls>"
             )
         )
         return {"status": "completed", "output_text": text}

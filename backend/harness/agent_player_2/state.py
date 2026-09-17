@@ -5,7 +5,21 @@ from typing import Any, Literal, TypedDict
 from chess_core import legal_moves, parse_position, position_status
 from harness.contracts import TurnInput, TurnRequest, turn_request_from_input
 
-Phase = Literal["defense", "attack", "synthesis"]
+Phase = Literal["synthesis"]
+BranchActor = Literal["agent", "opponent"]
+
+
+class TestedLineNode(TypedDict):
+    branch_id: str
+    parent_id: str | None
+    ply: int
+    actor: BranchActor
+    side: str
+    move: str
+    fen: str
+    material_change_cp: int
+    annotation: str | None
+    terminal: bool
 
 
 class TurnState(TypedDict):
@@ -17,9 +31,13 @@ class TurnState(TypedDict):
     legal_san: list[str]
     phase: Phase
     scratch_moves: list[str]
+    tested_lines: list[TestedLineNode]
+    active_branch_id: str | None
+    running_thoughts: str
+    latest_tool_results: list[dict[str, Any]]
     history: list[dict[str, Any]]
     correction: str
-    pending_tool: dict[str, Any] | None
+    pending_tools: list[dict[str, Any]]
     next_step: str
     forced_retry: bool
     retry_output: str
@@ -29,8 +47,6 @@ class TurnState(TypedDict):
     tool_calls: int
     rejected_calls: int
     protocol_errors: int
-    defense_report: str
-    attack_report: str
     decision: dict[str, str] | None
     events: list[dict[str, Any]]
 
@@ -39,9 +55,13 @@ def phase_state(phase: Phase) -> dict[str, Any]:
     return dict(
         phase=phase,
         scratch_moves=[],
+        tested_lines=[],
+        active_branch_id=None,
+        running_thoughts="",
+        latest_tool_results=[],
         history=[],
         correction="",
-        pending_tool=None,
+        pending_tools=[],
         next_step=phase,
         forced_retry=False,
         retry_output="",
@@ -62,15 +82,13 @@ def initial_state(request: TurnRequest) -> TurnState:
     if not moves:
         raise ValueError("Cannot choose a move from a position with no legal moves.")
     return {
-        **phase_state("defense"),
+        **phase_state("synthesis"),
         "game_id": request.game_id,
         "ply": request.ply,
         "canonical_fen": fen,
         "pgn": request.pgn,
         "side": request.side,
         "legal_san": moves,
-        "defense_report": "",
-        "attack_report": "",
         "decision": None,
         "events": [],
     }

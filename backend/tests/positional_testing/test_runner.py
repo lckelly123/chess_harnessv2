@@ -31,7 +31,7 @@ class FakeCatalog:
         except KeyError as exc:
             raise UnknownHarnessError(f"Unknown harness version: {harness_id}") from exc
 
-    async def create_player(self, harness_id, cancellation_check):
+    async def create_player(self, harness_id, cancellation_check, model_selection=None):
         self.definition(harness_id)
         assert cancellation_check() is False
         return self.player, "loaded-model"
