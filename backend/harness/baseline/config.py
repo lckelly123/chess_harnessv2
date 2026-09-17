@@ -17,6 +17,7 @@ class BaselineConfig:
     max_model_calls: int = 20
     history_event_limit: int = 7
     prompt_version: str = "baseline-direct-submit-langgraph-v1"
+    provider: str = "lmstudio"
 
     def __post_init__(self):
         if not self.model.strip():

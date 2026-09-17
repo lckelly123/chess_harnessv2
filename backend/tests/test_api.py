@@ -1,5 +1,6 @@
 import asyncio
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -8,10 +9,12 @@ from app.matches.catalog import (
     AGENT_PLAYER_2_ID,
     BASELINE_ID,
     HARNESSES,
+    HarnessCatalog,
     UnknownHarnessError,
 )
 from app.matches.manager import MatchSettings
 from app.matches.repository import MatchRepository
+from app.models import ModelSelection
 from chess_core import normalize_move
 from harness.contracts import MoveDecision
 
@@ -39,6 +42,7 @@ class FakeCatalog:
     def __init__(self):
         self._definitions = {item.id: item for item in HARNESSES}
         self.one_shot_requests = []
+        self.model_selections = []
 
     def list(self):
         return list(self._definitions.values())
@@ -49,13 +53,17 @@ class FakeCatalog:
         except KeyError as exc:
             raise UnknownHarnessError(f"Unknown harness version: {harness_id}") from exc
 
-    async def create_players(self, white_id, black_id, cancellation_check):
+    async def create_players(
+        self, white_id, black_id, cancellation_check, model_selection=None
+    ):
         self.definition(white_id)
         self.definition(black_id)
+        self.model_selections.append(model_selection)
         return SlowPlayer(), SlowPlayer(), "scripted-model"
 
-    async def create_player(self, harness_id, cancellation_check):
+    async def create_player(self, harness_id, cancellation_check, model_selection=None):
         self.definition(harness_id)
+        self.model_selections.append(model_selection)
         return OneShotPlayer(self), "scripted-model"
 
 
@@ -207,5 +215,119 @@ def test_rejects_unknown_harness(database_path) -> None:
                 },
             )
             assert positional_position.status_code == 404
+    finally:
+        repository.close()
+
+
+@pytest.mark.parametrize("model_id", ["qwen", "gpt-luna"])
+def test_both_endpoints_forward_model_selection(database_path, model_id):
+    repository = MatchRepository(str(database_path))
+    catalog = FakeCatalog()
+    app = create_app(repository=repository, catalog=catalog)
+    selection = {"modelId": model_id, "reasoningEffort": "medium"}
+    try:
+        with TestClient(app) as client:
+            match = client.post(
+                "/api/matches",
+                json={
+                    "whiteHarnessId": BASELINE_ID,
+                    "blackHarnessId": AGENT_PLAYER_2_ID,
+                    "modelSelection": selection,
+                },
+            )
+            assert match.status_code == 201
+            client.post(f"/api/matches/{match.json()['id']}/stop")
+            run = client.post(
+                "/api/positional-testing/runs",
+                json={
+                    "positionId": "before_queen_blunder",
+                    "harnessId": AGENT_PLAYER_2_ID,
+                    "modelSelection": selection,
+                },
+            )
+            assert run.status_code == 200
+            assert catalog.model_selections == [
+                ModelSelection(model_id=model_id),
+                ModelSelection(model_id=model_id),
+            ]
+    finally:
+        repository.close()
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [
+        {"modelId": "unregistered", "reasoningEffort": "medium"},
+        {"modelId": "gpt-luna", "reasoningEffort": "high"},
+        {"modelId": "gpt-luna", "baseUrl": "https://untrusted.invalid"},
+        {},
+    ],
+)
+def test_invalid_model_selection_is_rejected_before_run(database_path, selection):
+    repository = MatchRepository(str(database_path))
+    catalog = FakeCatalog()
+    app = create_app(repository=repository, catalog=catalog)
+    try:
+        with TestClient(app) as client:
+            for path, payload in (
+                (
+                    "/api/matches",
+                    {
+                        "whiteHarnessId": BASELINE_ID,
+                        "blackHarnessId": AGENT_PLAYER_2_ID,
+                    },
+                ),
+                (
+                    "/api/positional-testing/runs",
+                    {
+                        "positionId": "before_queen_blunder",
+                        "harnessId": AGENT_PLAYER_2_ID,
+                    },
+                ),
+            ):
+                response = client.post(
+                    path, json={**payload, "modelSelection": selection}
+                )
+                assert response.status_code == 422
+            assert catalog.model_selections == []
+            assert repository.list_matches().total == 0
+    finally:
+        repository.close()
+
+
+def test_missing_openai_key_returns_actionable_error_without_local_fallback(
+    database_path,
+):
+    async def unexpected_local_discovery():
+        pytest.fail("GPT must not discover or fall back to a local model")
+
+    repository = MatchRepository(str(database_path))
+    catalog = HarnessCatalog(object(), model_resolver=unexpected_local_discovery)
+    app = create_app(repository=repository, catalog=catalog)
+    try:
+        with TestClient(app) as client:
+            for path, payload in (
+                (
+                    "/api/matches",
+                    {
+                        "whiteHarnessId": BASELINE_ID,
+                        "blackHarnessId": AGENT_PLAYER_2_ID,
+                    },
+                ),
+                (
+                    "/api/positional-testing/runs",
+                    {
+                        "positionId": "before_queen_blunder",
+                        "harnessId": AGENT_PLAYER_2_ID,
+                    },
+                ),
+            ):
+                response = client.post(
+                    path,
+                    json={**payload, "modelSelection": {"modelId": "gpt-luna"}},
+                )
+                assert response.status_code == 503
+                assert "OPENAI_API_KEY" in response.json()["detail"]
+            assert repository.list_matches().total == 0
     finally:
         repository.close()

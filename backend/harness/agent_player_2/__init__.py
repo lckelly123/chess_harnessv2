@@ -1,4 +1,4 @@
-"""Independent defense and attack reviews followed by synthesis."""
+"""Single synthesis-phase chess harness."""
 
 from .config import AgentConfig
 from .graph import AgentPlayer2, build_graph

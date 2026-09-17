@@ -107,6 +107,7 @@ async def start_match(request_body: StartMatchRequest, request: Request) -> Matc
             request_body.white_harness_id,
             request_body.black_harness_id,
             request_body.folder_id,
+            model_selection=request_body.model_selection,
         )
     except (UnknownHarnessError, UnknownFolderError) as exc:
         raise HTTPException(

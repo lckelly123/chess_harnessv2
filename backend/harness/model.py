@@ -1,4 +1,4 @@
-"""LM Studio's stateless Responses API, isolated from chess and orchestration."""
+"""Stateless Responses API clients, isolated from chess and orchestration."""
 
 import asyncio
 import json
@@ -8,7 +8,16 @@ import urllib.request
 from typing import Any, Protocol
 
 from langsmith.wrappers import wrap_openai
-from openai import AsyncOpenAI
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    AsyncOpenAI,
+    AuthenticationError,
+    PermissionDeniedError,
+    RateLimitError,
+)
+
+from harness.contracts import HarnessError
 
 
 class Model(Protocol):
@@ -25,7 +34,7 @@ class Model(Protocol):
 
 
 class ModelResolutionError(RuntimeError):
-    """A stable LM Studio model could not be selected for a match."""
+    """The requested model could not be configured for a run."""
 
 
 def _native_models_url(base_url: str) -> str:
@@ -104,24 +113,11 @@ async def resolve_lmstudio_model(
     return loaded[0]
 
 
-class LMStudioModel:
-    def __init__(
-        self,
-        client: AsyncOpenAI | None = None,
-        *,
-        base_url: str | None = None,
-        api_key: str | None = None,
-    ):
-        self.client = wrap_openai(
-            client
-            or AsyncOpenAI(
-                base_url=base_url
-                or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1"),
-                api_key=api_key or os.getenv("LMSTUDIO_API_KEY") or "lm-studio",
-                timeout=120.0,
-                max_retries=0,  # Retry decisions belong to the graph, not the SDK.
-            )
-        )
+class _ResponsesModel:
+    def __init__(self, client: AsyncOpenAI, *, provider: str, label: str):
+        self.client = wrap_openai(client)
+        self.provider = provider
+        self.label = label
 
     async def complete(
         self,
@@ -133,28 +129,96 @@ class LMStudioModel:
         max_output_tokens: int,
         forced_retry: bool,
     ) -> dict[str, Any]:
-        response = await self.client.responses.create(
-            model=model,
-            input=[
-                {"role": "developer", "content": instructions},
-                {"role": "user", "content": dynamic_input},
-            ],
-            reasoning={"effort": reasoning_effort},
-            max_output_tokens=max_output_tokens,
-            store=False,
-            # The legacy local path embeds schemas and a tagged call in text.
-            # No native tools, conversation IDs, or provider history are sent.
-            langsmith_extra={
-                "name": "LM Studio forced tool retry"
-                if forced_retry
-                else "LM Studio pass",
-                "metadata": {"ls_provider": "lmstudio", "ls_model_name": model},
-            },
-        )
-        return response.model_dump(mode="json")
+        try:
+            response = await self.client.responses.create(
+                model=model,
+                input=[
+                    {"role": "developer", "content": instructions},
+                    {"role": "user", "content": dynamic_input},
+                ],
+                reasoning={"effort": reasoning_effort},
+                max_output_tokens=max_output_tokens,
+                store=False,
+                # Both providers use the same text-tool protocol, without
+                # native tools, conversation IDs, or provider-side history.
+                langsmith_extra={
+                    "name": f"{self.label} forced tool retry"
+                    if forced_retry
+                    else f"{self.label} pass",
+                    "metadata": {
+                        "ls_provider": self.provider,
+                        "ls_model_name": model,
+                    },
+                },
+            )
+        except AuthenticationError as exc:
+            raise HarnessError(
+                f"{self.label} authentication failed. Check the backend API key."
+            ) from exc
+        except PermissionDeniedError as exc:
+            raise HarnessError(
+                f"{self.label} denied access to {model}. Check model access."
+            ) from exc
+        except RateLimitError as exc:
+            raise HarnessError(
+                f"{self.label} rate limit or quota exceeded. Check API limits and billing."
+            ) from exc
+        except APIConnectionError as exc:
+            raise HarnessError(
+                f"{self.label} could not be reached. Check the connection and try again."
+            ) from exc
+        except APIStatusError as exc:
+            raise HarnessError(
+                f"{self.label} request for {model} failed (HTTP {exc.status_code})."
+            ) from exc
+        payload = response.model_dump(mode="json")
+        if payload.get("status") in {"failed", "cancelled"}:
+            raise HarnessError(f"{self.label} response status: {payload['status']}.")
+        return payload
 
     async def aclose(self):
         await self.client.close()
+
+
+class LMStudioModel(_ResponsesModel):
+    def __init__(
+        self,
+        client: AsyncOpenAI | None = None,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ):
+        super().__init__(
+            client
+            or AsyncOpenAI(
+                base_url=base_url
+                or os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1"),
+                api_key=api_key or os.getenv("LMSTUDIO_API_KEY") or "lm-studio",
+                timeout=120.0,
+                max_retries=0,  # Retry decisions belong to the graph, not the SDK.
+            ),
+            provider="lmstudio",
+            label="LM Studio",
+        )
+
+
+class OpenAIModel(_ResponsesModel):
+    def __init__(
+        self, client: AsyncOpenAI | None = None, *, api_key: str | None = None
+    ):
+        if client is None:
+            key = (api_key or os.getenv("OPENAI_API_KEY") or "").strip()
+            if not key:
+                raise ModelResolutionError(
+                    "GPT Luna requires OPENAI_API_KEY in the backend environment."
+                )
+            client = AsyncOpenAI(
+                base_url="https://api.openai.com/v1",
+                api_key=key,
+                timeout=120.0,
+                max_retries=0,
+            )
+        super().__init__(client, provider="openai", label="OpenAI")
 
 
 def visible_output(response: dict[str, Any]) -> tuple[str, str]:

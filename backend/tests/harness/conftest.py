@@ -9,6 +9,7 @@ from harness.contracts import TurnRequest
 DEFENSE = "Severity: None. No immediate defensive obligation was established by the reviewed position."
 ATTACK = "Opportunity: Practical. The central pawn advance develops space without a verified forced gain."
 JUSTIFICATION = "Test whether the central pawn advance allows a forcing reply before ranking candidates."
+RUNNING_THOUGHTS = "The central pawn advance is the current candidate. Its strongest reply remains to be tested."
 
 
 def call(name, **arguments):
@@ -17,6 +18,23 @@ def call(name, **arguments):
         "output_text": "<agent_tool_call>"
         + json.dumps({"tool": name, "arguments": arguments})
         + "</agent_tool_call>",
+    }
+
+
+def thoughtful_call(name, *, running_thoughts=RUNNING_THOUGHTS, **arguments):
+    return thoughtful_batch(
+        {"tool": name, "arguments": arguments},
+        running_thoughts=running_thoughts,
+    )
+
+
+def thoughtful_batch(*calls, running_thoughts=RUNNING_THOUGHTS):
+    return {
+        "status": "completed",
+        "output_text": (
+            f"<running_thoughts>{running_thoughts}</running_thoughts>"
+            "<agent_tool_calls>" + json.dumps(list(calls)) + "</agent_tool_calls>"
+        ),
     }
 
 

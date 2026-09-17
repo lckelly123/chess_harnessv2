@@ -1,4 +1,4 @@
-"""The complete orchestration topology for one move decision."""
+"""Single-phase orchestration for one move decision."""
 
 from collections.abc import Callable
 
@@ -9,7 +9,7 @@ from harness.contracts import HarnessError, MoveDecision, TurnInput, TurnRequest
 from harness.model import Model
 
 from .config import AgentConfig
-from .nodes import PhaseNodes
+from .nodes import SynthesisNodes
 from .state import TurnState, initial_state, prepare_turn
 
 
@@ -24,7 +24,7 @@ def build_graph(
     *,
     accept_turn_input: bool = False,
 ):
-    nodes = PhaseNodes(model, config, cancellation_check)
+    nodes = SynthesisNodes(model, config, cancellation_check)
     graph = (
         StateGraph(TurnState, input_schema=TurnInput)
         if accept_turn_input
@@ -32,37 +32,13 @@ def build_graph(
     )
     if accept_turn_input:
         graph.add_node("prepare_turn", prepare_turn)
-    graph.add_node("defense", nodes.defense)
-    graph.add_node("defense_tools", nodes.defense_tools)
-    graph.add_node("attack", nodes.attack)
-    graph.add_node("attack_tools", nodes.attack_tools)
     graph.add_node("synthesis", nodes.synthesis)
     graph.add_node("synthesis_tools", nodes.synthesis_tools)
     if accept_turn_input:
         graph.add_edge(START, "prepare_turn")
-        graph.add_edge("prepare_turn", "defense")
+        graph.add_edge("prepare_turn", "synthesis")
     else:
-        graph.add_edge(START, "defense")
-    graph.add_conditional_edges(
-        "defense",
-        route,
-        {
-            "defense": "defense",
-            "defense_tools": "defense_tools",
-            "attack": "attack",
-        },
-    )
-    graph.add_edge("defense_tools", "defense")
-    graph.add_conditional_edges(
-        "attack",
-        route,
-        {
-            "attack": "attack",
-            "attack_tools": "attack_tools",
-            "synthesis": "synthesis",
-        },
-    )
-    graph.add_edge("attack_tools", "attack")
+        graph.add_edge(START, "synthesis")
     graph.add_conditional_edges(
         "synthesis",
         route,
@@ -91,9 +67,13 @@ class AgentPlayer2:
     def run_config(self, request: TurnRequest):
         return {
             "run_name": "agent_player_2_turn",
-            # Each phase can run a model node and a tool node per model pass.
-            "recursion_limit": 6 * self.config.max_model_calls + 10,
-            "tags": ["agent_player_2", "lmstudio", self.config.prompt_version],
+            # A model pass can route through one tool node before repeating.
+            "recursion_limit": 2 * self.config.max_model_calls + 4,
+            "tags": [
+                "agent_player_2",
+                self.config.provider,
+                self.config.prompt_version,
+            ],
             "metadata": {
                 "game_id": request.game_id,
                 "thread_id": request.game_id,
@@ -102,6 +82,7 @@ class AgentPlayer2:
                 "side": request.side,
                 "harness_version": self.config.prompt_version,
                 "model": self.config.model,
+                "provider": self.config.provider,
             },
         }
 
@@ -115,6 +96,4 @@ class AgentPlayer2:
         return MoveDecision(
             move=normalize_move(request.fen, decision["move"]),
             justification=decision["justification"],
-            defense_report=state["defense_report"],
-            attack_report=state["attack_report"],
         )

@@ -60,7 +60,9 @@ def _render_section(
     phase_root = (INPUT_ROOT / phase).resolve()
     path = (phase_root / section.template).resolve()
     if not path.is_relative_to(phase_root):
-        raise ValueError(f"Prompt section escapes its phase directory: {section.template}")
+        raise ValueError(
+            f"Prompt section escapes its phase directory: {section.template}"
+        )
     template = TEMPLATE_ENVIRONMENT.from_string(path.read_text(encoding="utf-8"))
     context = build_section_context(section.provider, state, section.parameters)
     return _compact_markdown(template.render(**context))
@@ -88,25 +90,9 @@ def build_prompt(state: TurnState) -> PromptPacket:
     )
 
 
-def _build_phase_prompt(state: TurnState, phase: str) -> PromptPacket:
-    if state["phase"] != phase:
-        raise ValueError(f"Prompt requires {phase} phase state.")
-    return build_prompt(state)
-
-
-def build_attack_prompt(state: TurnState) -> PromptPacket:
-    """Compatibility wrapper for callers that already know the phase."""
-
-    return _build_phase_prompt(state, "attack")
-
-
-def build_defense_prompt(state: TurnState) -> PromptPacket:
-    """Compatibility wrapper for callers that already know the phase."""
-
-    return _build_phase_prompt(state, "defense")
-
-
 def build_synthesis_prompt(state: TurnState) -> PromptPacket:
-    """Compatibility wrapper for callers that already know the phase."""
+    """Build the only model input used by Agent Player 2."""
 
-    return _build_phase_prompt(state, "synthesis")
+    if state["phase"] != "synthesis":
+        raise ValueError("Prompt requires synthesis phase state.")
+    return build_prompt(state)

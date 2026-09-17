@@ -18,6 +18,7 @@ class AgentConfig:
     max_model_calls: int = 80
     history_event_limit: int = 7  # Current legacy runtime default (not its older docs).
     prompt_version: str = "agent-player-2-langgraph-v1"
+    provider: str = "lmstudio"
 
     def __post_init__(self):
         if not self.model.strip():

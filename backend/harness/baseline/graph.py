@@ -64,7 +64,7 @@ class BaselineAgent:
         return {
             "run_name": "baseline_turn",
             "recursion_limit": 2 * self.config.max_model_calls + 10,
-            "tags": ["baseline", "lmstudio", self.config.prompt_version],
+            "tags": ["baseline", self.config.provider, self.config.prompt_version],
             "metadata": {
                 "game_id": request.game_id,
                 "thread_id": request.game_id,
@@ -73,6 +73,7 @@ class BaselineAgent:
                 "harness": "baseline",
                 "harness_version": self.config.prompt_version,
                 "model": self.config.model,
+                "provider": self.config.provider,
             },
         }
 

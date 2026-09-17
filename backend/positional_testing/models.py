@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models import ModelSelection
+
 
 def _to_camel(value: str) -> str:
     first, *rest = value.split("_")
@@ -41,6 +43,7 @@ class SavedPositionList(PositionalTestingModel):
 class RunSavedPositionRequest(PositionalTestingModel):
     position_id: str = Field(min_length=1, max_length=240)
     harness_id: str = Field(min_length=1, max_length=120)
+    model_selection: ModelSelection | None = None
 
     @field_validator("position_id", "harness_id")
     @classmethod

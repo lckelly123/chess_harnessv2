@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 
-from conftest import JUSTIFICATION, ScriptedModel, call, finish
+from conftest import JUSTIFICATION, ScriptedModel, call, finish, thoughtful_call
 
 from chess_core import STARTING_FEN
 from harness import studio
@@ -44,7 +44,18 @@ def test_agent_player_1_studio_graph_accepts_public_turn_input(request_position)
 
 def test_agent_player_2_studio_graph_accepts_public_turn_input(request_position):
     graph = build_agent_player_2_graph(
-        ScriptedModel(finish()),
+        ScriptedModel(
+            [
+                thoughtful_call("scratch_play_move", move="e4"),
+                thoughtful_call("scratch_play_move", move="e5"),
+                thoughtful_call(
+                    "submit_move",
+                    move="e4",
+                    tested_branch="B1",
+                    decision_summary=JUSTIFICATION,
+                ),
+            ]
+        ),
         AgentPlayer2Config(model="test-model"),
         accept_turn_input=True,
     )
@@ -52,9 +63,13 @@ def test_agent_player_2_studio_graph_accepts_public_turn_input(request_position)
     state = asyncio.run(graph.ainvoke(public_input(request_position)))
 
     assert state["decision"]["move"] == "e4"
-    assert {"prepare_turn", "defense", "attack", "synthesis"} <= set(
-        graph.get_graph().nodes
-    )
+    assert set(graph.get_graph().nodes) == {
+        "__start__",
+        "prepare_turn",
+        "synthesis",
+        "synthesis_tools",
+        "__end__",
+    }
 
 
 def test_baseline_studio_graph_accepts_public_turn_input(request_position):
@@ -85,7 +100,7 @@ def test_baseline_studio_graph_accepts_public_turn_input(request_position):
     }
 
 
-def test_studio_introspection_builds_both_graphs_without_lmstudio(monkeypatch):
+def test_studio_introspection_builds_all_graphs_without_lmstudio(monkeypatch):
     async def unexpected_resolution(**kwargs):
         del kwargs
         raise AssertionError("Introspection must not contact LM Studio.")
@@ -96,15 +111,21 @@ def test_studio_introspection_builds_both_graphs_without_lmstudio(monkeypatch):
     async def inspect_graphs():
         async with studio.make_agent_player_1_graph(runtime) as phased:
             phased_nodes = set(phased.get_graph().nodes)
-        async with studio.make_agent_player_2_graph(runtime) as copied:
-            copied_nodes = set(copied.get_graph().nodes)
+        async with studio.make_agent_player_2_graph(runtime) as single_phase:
+            single_phase_nodes = set(single_phase.get_graph().nodes)
         async with studio.make_baseline_graph(runtime) as baseline:
             baseline_nodes = set(baseline.get_graph().nodes)
-        return phased_nodes, copied_nodes, baseline_nodes
+        return phased_nodes, single_phase_nodes, baseline_nodes
 
-    phased_nodes, copied_nodes, baseline_nodes = asyncio.run(inspect_graphs())
+    phased_nodes, single_phase_nodes, baseline_nodes = asyncio.run(inspect_graphs())
     assert {"prepare_turn", "defense", "attack", "synthesis"} <= phased_nodes
-    assert copied_nodes == phased_nodes
+    assert single_phase_nodes == {
+        "__start__",
+        "prepare_turn",
+        "synthesis",
+        "synthesis_tools",
+        "__end__",
+    }
     assert {"prepare_turn", "decide", "validate_submission"} <= baseline_nodes
 
 

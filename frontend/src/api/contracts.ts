@@ -3,6 +3,12 @@ export type MatchStatus = "queued" | "running" | "completed" | "stopped" | "fail
 export type TracePhase = "observe" | "plan" | "act" | "verify";
 export type TraceStatus = "complete" | "active" | "failed";
 
+// Backend allowlisted model selection, resolved once per run.
+export interface ModelSelection {
+  modelId: "qwen" | "gpt-luna";
+  reasoningEffort: "medium";
+}
+
 export interface HarnessVersion {
   id: string;
   name: string;
@@ -98,6 +104,7 @@ export interface PositionalTestPositionList {
 export interface RunPositionalTestInput {
   positionId: string;
   harnessId: string;
+  modelSelection?: ModelSelection;
 }
 
 export interface PositionalTestMove {
@@ -132,6 +139,7 @@ export interface StartMatchInput {
   whiteHarnessId: string;
   blackHarnessId: string;
   folderId: string | null;
+  modelSelection?: ModelSelection;
 }
 
 export interface MatchApi {

@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from uuid import uuid4
 
-from app.models import MatchDetail
+from app.models import MatchDetail, ModelSelection
 
 from .catalog import HarnessCatalog
 from .repository import MatchRepository, UnknownFolderError
@@ -56,6 +56,7 @@ class MatchManager:
         white_id: str,
         black_id: str,
         folder_id: str | None = None,
+        model_selection: ModelSelection | None = None,
     ) -> MatchDetail:
         async with self._lock:
             if self.repository.active_count() >= self.settings.max_active:
@@ -72,6 +73,7 @@ class MatchManager:
                 white_id,
                 black_id,
                 cancelled.is_set,
+                model_selection=model_selection,
             )
             match_id = f"match-{uuid4().hex[:12]}"
             match = self.repository.create_match(

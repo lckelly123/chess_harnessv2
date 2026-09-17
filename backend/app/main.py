@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from harness.model import LMStudioModel
+from harness.model import LMStudioModel, OpenAIModel
 from positional_testing.routes import router as positional_testing_router
 from positional_testing.runner import PositionalTestRunner
 
@@ -34,10 +35,13 @@ def create_app(
         active_repository.recover_interrupted()
 
         model_client = None
+        openai_client = None
         active_catalog = catalog
         if active_catalog is None:
             model_client = LMStudioModel()
-            active_catalog = HarnessCatalog(model_client)
+            if os.getenv("OPENAI_API_KEY", "").strip():
+                openai_client = OpenAIModel()
+            active_catalog = HarnessCatalog(model_client, openai_model=openai_client)
 
         manager = MatchManager(active_repository, active_catalog, configured_settings)
         app.state.match_manager = manager
@@ -48,6 +52,8 @@ def create_app(
             await manager.close()
             if model_client is not None:
                 await model_client.aclose()
+            if openai_client is not None:
+                await openai_client.aclose()
             if owns_repository:
                 active_repository.close()
 

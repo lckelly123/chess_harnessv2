@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 import { matchApi } from "./api/client";
-import type { GameFolder, HarnessVersion, MatchDetail, MatchSummary } from "./api/contracts";
+import type { GameFolder, HarnessVersion, MatchDetail, MatchSummary, ModelSelection } from "./api/contracts";
 import { Chessboard } from "./components/Chessboard";
 import { FolderRail } from "./components/FolderRail";
 import { HistoryList } from "./components/HistoryList";
 import { MatchDocket } from "./components/MatchDocket";
 import { MatchStatus } from "./components/MatchStatus";
+import { ModelSelector } from "./components/ModelSelector";
 import { PositionalTesting } from "./components/PositionalTesting";
 import { ReplayControls } from "./components/ReplayControls";
 import { TracePanel } from "./components/TracePanel";
@@ -31,6 +32,11 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<DeskMode>("live");
   const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>("matches");
+  const [modelSelection, setModelSelection] = useState<ModelSelection>({
+    modelId: "qwen",
+    reasoningEffort: "medium",
+  });
+  const [positionalRunning, setPositionalRunning] = useState(false);
   const [displayPly, setDisplayPly] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -146,6 +152,7 @@ export default function App() {
         whiteHarnessId: whiteId,
         blackHarnessId: blackId,
         folderId: startFolderId || null,
+        modelSelection,
       });
       setActiveMatchId(detail.id);
       setSelectedMatch(detail);
@@ -282,6 +289,11 @@ export default function App() {
       </header>
 
       <main id="top">
+        <ModelSelector
+          selection={modelSelection}
+          disabled={busy || positionalRunning}
+          onChange={setModelSelection}
+        />
         <div hidden={workspaceSection !== "matches"}>
         <MatchDocket
           harnesses={harnesses}
@@ -379,7 +391,11 @@ export default function App() {
         </div>
         </div>
         <div hidden={workspaceSection !== "positional-testing"}>
-          <PositionalTesting />
+          <PositionalTesting
+            modelSelection={modelSelection}
+            running={positionalRunning}
+            onRunningChange={setPositionalRunning}
+          />
         </div>
       </main>
       <footer>

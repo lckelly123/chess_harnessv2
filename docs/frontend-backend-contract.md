@@ -41,6 +41,21 @@ FastAPI also exposes an interactive schema at [http://localhost:8000/docs](http:
 
 ## LangGraph integration
 
+Both start endpoints accept an optional `modelSelection` object:
+
+```json
+{"modelId": "gpt-luna", "reasoningEffort": "medium"}
+```
+
+`modelId` is restricted to `qwen` or `gpt-luna`; the only selectable reasoning
+effort is `medium`. Omission keeps the existing LM Studio default. The backend
+maps `gpt-luna` to `gpt-5.6-luna`, resolves one client/configuration per run, and
+does not accept provider URLs or credentials from the browser. A match uses that
+selection for both players. Invalid selections return 422; missing GPT
+credentials return 503 without starting a run. Positional provider failures return
+502; provider failures during a match mark that match failed. There is no fallback
+to another model. Forced-format retries retain their separate no-reasoning policy.
+
 The match runner calls the selected graph once per turn and uses `game_id` as the
 LangSmith `thread_id`. SQLite public events describe turn starts, committed moves,
 and terminal states. React does not receive raw graph state, model secrets,
