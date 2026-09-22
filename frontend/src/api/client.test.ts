@@ -6,7 +6,7 @@ afterEach(() => {
 });
 
 describe("matchApi", () => {
-  it.each(["qwen", "gpt-luna"] as const)("includes the requested %s model and medium reasoning on new runs", async (modelId) => {
+  it.each(["qwen", "gpt-terra"] as const)("includes the requested %s model and medium reasoning on new runs", async (modelId) => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
       new Response(JSON.stringify({ id: "request-only" }), {
         status: 200,

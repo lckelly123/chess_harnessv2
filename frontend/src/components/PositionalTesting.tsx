@@ -23,6 +23,7 @@ const POSITIONAL_HARNESSES = [
   { id: "baseline-direct-submit-langgraph-v1", name: "Baseline" },
   { id: "agent-player-1-langgraph-v1", name: "Agent Player 1" },
   { id: "agent-player-2-langgraph-v1", name: "Agent Player 2" },
+  { id: "agent-player-3-langgraph-v1", name: "Agent Player 3" },
 ];
 
 function titleCase(value: string) {

@@ -7,6 +7,7 @@ from app.main import create_app
 from app.matches.catalog import (
     AGENT_PLAYER_1_ID,
     AGENT_PLAYER_2_ID,
+    AGENT_PLAYER_3_ID,
     BASELINE_ID,
     HARNESSES,
     HarnessCatalog,
@@ -90,6 +91,7 @@ def test_real_api_contract_and_stop(database_path) -> None:
                 BASELINE_ID,
                 AGENT_PLAYER_1_ID,
                 AGENT_PLAYER_2_ID,
+                AGENT_PLAYER_3_ID,
             }
 
             positions = client.get("/api/positional-testing/positions")
@@ -219,7 +221,7 @@ def test_rejects_unknown_harness(database_path) -> None:
         repository.close()
 
 
-@pytest.mark.parametrize("model_id", ["qwen", "gpt-luna"])
+@pytest.mark.parametrize("model_id", ["qwen", "gpt-terra"])
 def test_both_endpoints_forward_model_selection(database_path, model_id):
     repository = MatchRepository(str(database_path))
     catalog = FakeCatalog()
@@ -258,8 +260,8 @@ def test_both_endpoints_forward_model_selection(database_path, model_id):
     "selection",
     [
         {"modelId": "unregistered", "reasoningEffort": "medium"},
-        {"modelId": "gpt-luna", "reasoningEffort": "high"},
-        {"modelId": "gpt-luna", "baseUrl": "https://untrusted.invalid"},
+        {"modelId": "gpt-terra", "reasoningEffort": "high"},
+        {"modelId": "gpt-terra", "baseUrl": "https://untrusted.invalid"},
         {},
     ],
 )
@@ -324,7 +326,7 @@ def test_missing_openai_key_returns_actionable_error_without_local_fallback(
             ):
                 response = client.post(
                     path,
-                    json={**payload, "modelSelection": {"modelId": "gpt-luna"}},
+                    json={**payload, "modelSelection": {"modelId": "gpt-terra"}},
                 )
                 assert response.status_code == 503
                 assert "OPENAI_API_KEY" in response.json()["detail"]

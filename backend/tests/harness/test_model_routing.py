@@ -6,8 +6,9 @@ from conftest import JUSTIFICATION, ScriptedModel, thoughtful_call
 from app.matches.catalog import (
     AGENT_PLAYER_1_ID,
     AGENT_PLAYER_2_ID,
+    AGENT_PLAYER_3_ID,
     BASELINE_ID,
-    GPT_LUNA_MODEL,
+    GPT_TERRA_MODEL,
     HarnessCatalog,
 )
 from app.models import ModelSelection
@@ -15,7 +16,7 @@ from harness.model import ModelResolutionError
 
 
 @pytest.mark.parametrize(
-    "harness_id", [BASELINE_ID, AGENT_PLAYER_1_ID, AGENT_PLAYER_2_ID]
+    "harness_id", [BASELINE_ID, AGENT_PLAYER_1_ID, AGENT_PLAYER_2_ID, AGENT_PLAYER_3_ID]
 )
 def test_gpt_selection_bypasses_lmstudio_and_uses_medium(
     harness_id, monkeypatch, request_position
@@ -35,10 +36,10 @@ def test_gpt_selection_bypasses_lmstudio_and_uses_medium(
     )
     player, name = asyncio.run(
         catalog.create_player(
-            harness_id, lambda: False, ModelSelection(model_id="gpt-luna")
+            harness_id, lambda: False, ModelSelection(model_id="gpt-terra")
         )
     )
-    assert name == player.config.model == GPT_LUNA_MODEL
+    assert name == player.config.model == GPT_TERRA_MODEL
     assert player.config.provider == "openai"
     assert player.config.reasoning_effort == "medium"
     assert player.config.retry_reasoning_effort == "none"
@@ -78,7 +79,7 @@ def test_selection_is_held_per_run_without_changing_another_client(request_posit
             AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="qwen")
         )
         gpt, _ = await catalog.create_player(
-            AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-luna")
+            AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-terra")
         )
         return await asyncio.gather(
             qwen.choose_move(request_position), gpt.choose_move(request_position)
@@ -89,13 +90,13 @@ def test_selection_is_held_per_run_without_changing_another_client(request_posit
     assert len(discoveries) == 1
     assert len(local.calls) == len(cloud.calls) == 3
     assert {call["model"] for call in local.calls} == {"test-qwen"}
-    assert {call["model"] for call in cloud.calls} == {GPT_LUNA_MODEL}
+    assert {call["model"] for call in cloud.calls} == {GPT_TERRA_MODEL}
     for local_call, cloud_call in zip(local.calls, cloud.calls, strict=True):
         assert local_call["instructions"] == cloud_call["instructions"]
         assert local_call["dynamic_input"] == cloud_call["dynamic_input"]
 
 
-@pytest.mark.parametrize("model_id", [None, "qwen", "gpt-luna"])
+@pytest.mark.parametrize("model_id", [None, "qwen", "gpt-terra"])
 def test_match_resolves_one_configuration_for_both_players(model_id, monkeypatch):
     monkeypatch.setenv("LMSTUDIO_REASONING_EFFORT", "low")
     discoveries = []
@@ -117,9 +118,9 @@ def test_match_resolves_one_configuration_for_both_players(model_id, monkeypatch
     )
     assert white.config.model == black.config.model == name
     assert white.config.reasoning_effort == black.config.reasoning_effort
-    if model_id == "gpt-luna":
+    if model_id == "gpt-terra":
         assert discoveries == []
-        assert name == GPT_LUNA_MODEL
+        assert name == GPT_TERRA_MODEL
     else:
         assert len(discoveries) == 1
         assert name == "test-qwen"
@@ -135,7 +136,7 @@ def test_gpt_output_limits_can_be_configured(monkeypatch):
     catalog = HarnessCatalog(ScriptedModel([]), openai_model=ScriptedModel([]))
     player, _ = asyncio.run(
         catalog.create_player(
-            AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-luna")
+            AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-terra")
         )
     )
     assert player.config.max_output_tokens == 2000
@@ -149,6 +150,6 @@ def test_invalid_gpt_output_limit_fails_before_run(monkeypatch, value):
     with pytest.raises(ModelResolutionError, match="OPENAI_MAX_OUTPUT_TOKENS"):
         asyncio.run(
             catalog.create_player(
-                AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-luna")
+                AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-terra")
             )
         )

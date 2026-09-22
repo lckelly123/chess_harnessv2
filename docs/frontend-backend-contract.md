@@ -44,12 +44,12 @@ FastAPI also exposes an interactive schema at [http://localhost:8000/docs](http:
 Both start endpoints accept an optional `modelSelection` object:
 
 ```json
-{"modelId": "gpt-luna", "reasoningEffort": "medium"}
+{"modelId": "gpt-terra", "reasoningEffort": "medium"}
 ```
 
-`modelId` is restricted to `qwen` or `gpt-luna`; the only selectable reasoning
+`modelId` is restricted to `qwen` or `gpt-terra`; the only selectable reasoning
 effort is `medium`. Omission keeps the existing LM Studio default. The backend
-maps `gpt-luna` to `gpt-5.6-luna`, resolves one client/configuration per run, and
+maps `gpt-terra` to `gpt-5.6-terra`, resolves one client/configuration per run, and
 does not accept provider URLs or credentials from the browser. A match uses that
 selection for both players. Invalid selections return 422; missing GPT
 credentials return 503 without starting a run. Positional provider failures return

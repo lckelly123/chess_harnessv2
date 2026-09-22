@@ -38,7 +38,7 @@ selector never changes an active run.
 
 - **Qwen** uses the configured or discovered LM Studio model. It remains the
   default when an older API client omits `modelSelection`.
-- **GPT Luna** uses OpenAI's `gpt-5.6-luna` with medium reasoning. Set
+- **GPT Terra** uses OpenAI's `gpt-5.6-terra` with medium reasoning. Set
   `OPENAI_API_KEY` in the root `.env`, then run
   `docker compose up -d --force-recreate backend`. Keys remain backend-only.
   GPT selection does not require LM Studio to be running and never falls back

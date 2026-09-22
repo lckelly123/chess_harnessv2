@@ -15,7 +15,7 @@ from app.main import create_app
 from app.matches.catalog import (
     AGENT_PLAYER_2_ID,
     BASELINE_ID,
-    GPT_LUNA_MODEL,
+    GPT_TERRA_MODEL,
     HarnessCatalog,
 )
 from app.matches.repository import MatchRepository
@@ -63,7 +63,7 @@ def mock_openai(responses):
                 "incomplete_details": {"reason": "max_output_tokens"}
                 if exhausted
                 else None,
-                "model": GPT_LUNA_MODEL,
+                "model": GPT_TERRA_MODEL,
                 "output": output,
                 "usage": {
                     "input_tokens": 100,
@@ -134,9 +134,9 @@ def test_gpt_runs_existing_graph_with_notes_batches_and_hidden_reasoning_retry(
     async def run():
         try:
             player, name = await catalog.create_player(
-                AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-luna")
+                AGENT_PLAYER_2_ID, lambda: False, ModelSelection(model_id="gpt-terra")
             )
-            assert name == GPT_LUNA_MODEL
+            assert name == GPT_TERRA_MODEL
             return await player.graph.ainvoke(
                 initial_state(request_position),
                 config={**player.run_config(request_position), "callbacks": [tracer]},
@@ -166,7 +166,7 @@ def test_gpt_runs_existing_graph_with_notes_batches_and_hidden_reasoning_retry(
     assert "Test e4 before judging it." in requests[2]["input"][1]["content"]
     assert "e4 is tested; the reply is pending." in requests[3]["input"][1]["content"]
     for payload in requests:
-        assert payload["model"] == GPT_LUNA_MODEL
+        assert payload["model"] == GPT_TERRA_MODEL
         assert payload["store"] is False
         assert "tools" not in payload
         assert "previous_response_id" not in payload
@@ -184,7 +184,7 @@ def test_gpt_runs_existing_graph_with_notes_batches_and_hidden_reasoning_retry(
     assert len(llms) == 4
     assert all(run["extra"]["metadata"]["ls_provider"] == "openai" for run in llms)
     assert all(
-        run["extra"]["metadata"]["ls_model_name"] == GPT_LUNA_MODEL for run in llms
+        run["extra"]["metadata"]["ls_model_name"] == GPT_TERRA_MODEL for run in llms
     )
     assert sum(run["name"] == "OpenAI forced tool retry" for run in llms) == 1
     assert "test-openai-secret" not in str(trace_client.mock_calls)
@@ -216,13 +216,13 @@ def test_gpt_positional_api_uses_real_graph_and_reports_resolved_model(database_
                     "positionId": "before_queen_blunder",
                     "harnessId": AGENT_PLAYER_2_ID,
                     "modelSelection": {
-                        "modelId": "gpt-luna",
+                        "modelId": "gpt-terra",
                         "reasoningEffort": "medium",
                     },
                 },
             )
             assert response.status_code == 200, response.text
-            assert response.json()["model"] == GPT_LUNA_MODEL
+            assert response.json()["model"] == GPT_TERRA_MODEL
             assert response.json()["move"]["san"] == "Qxe3+"
             assert len(requests) == 3
             assert repository.list_matches().total == 0
@@ -266,7 +266,7 @@ def test_provider_failures_return_safe_actionable_api_errors(
                 json={
                     "positionId": "before_queen_blunder",
                     "harnessId": BASELINE_ID,
-                    "modelSelection": {"modelId": "gpt-luna"},
+                    "modelSelection": {"modelId": "gpt-terra"},
                 },
             )
             assert response.status_code == 502
@@ -313,7 +313,7 @@ def test_connection_failure_is_a_harness_error():
     async def run():
         try:
             await model.complete(
-                model=GPT_LUNA_MODEL,
+                model=GPT_TERRA_MODEL,
                 instructions="test",
                 dynamic_input="test",
                 reasoning_effort="medium",
@@ -349,10 +349,10 @@ def test_app_initializes_and_closes_only_configured_clients(
                     app.state.match_manager.catalog.create_player(
                         AGENT_PLAYER_2_ID,
                         lambda: False,
-                        ModelSelection(model_id="gpt-luna"),
+                        ModelSelection(model_id="gpt-terra"),
                     )
                 )
-                assert name == GPT_LUNA_MODEL
+                assert name == GPT_TERRA_MODEL
                 assert player.config.provider == "openai"
             local.aclose.assert_not_awaited()
             cloud.aclose.assert_not_awaited()

@@ -7,6 +7,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.models import HarnessVersion, ModelSelection
+from harness.agent_player3 import AgentConfig as AgentPlayer3Config
+from harness.agent_player3 import AgentPlayer3
 from harness.agent_player_1 import AgentConfig as AgentPlayer1Config
 from harness.agent_player_1 import AgentPlayer1
 from harness.agent_player_2 import AgentConfig as AgentPlayer2Config
@@ -18,7 +20,8 @@ from harness.model import Model, ModelResolutionError, resolve_lmstudio_model
 BASELINE_ID = "baseline-direct-submit-langgraph-v1"
 AGENT_PLAYER_1_ID = "agent-player-1-langgraph-v1"
 AGENT_PLAYER_2_ID = "agent-player-2-langgraph-v1"
-GPT_LUNA_MODEL = "gpt-5.6-luna"
+AGENT_PLAYER_3_ID = "agent-player-3-langgraph-v1"
+GPT_TERRA_MODEL = "gpt-5.6-terra"
 
 HARNESSES = (
     HarnessVersion(
@@ -38,6 +41,12 @@ HARNESSES = (
         name="Agent Player 2",
         version="agent-player-2-langgraph-v1",
         summary="Single synthesis phase with deterministic analysis tools.",
+    ),
+    HarnessVersion(
+        id=AGENT_PLAYER_3_ID,
+        name="Agent Player 3",
+        version=AGENT_PLAYER_3_ID,
+        summary="Single synthesis phase with native Responses API tool calls.",
     ),
 )
 
@@ -118,15 +127,15 @@ class HarnessCatalog:
         return self._create(harness_id, resolved, cancellation_check), resolved.name
 
     async def _resolve_model(self, selection: ModelSelection | None) -> _ResolvedModel:
-        if selection is not None and selection.model_id == "gpt-luna":
+        if selection is not None and selection.model_id == "gpt-terra":
             if self._openai_model is None:
                 raise ModelResolutionError(
-                    "GPT Luna requires OPENAI_API_KEY in the backend environment. "
+                    "GPT Terra requires OPENAI_API_KEY in the backend environment. "
                     "Set it and restart the backend."
                 )
             return _ResolvedModel(
                 client=self._openai_model,
-                name=GPT_LUNA_MODEL,
+                name=GPT_TERRA_MODEL,
                 provider="openai",
                 reasoning_effort=selection.reasoning_effort,
                 retry_reasoning_effort="none",
@@ -178,6 +187,12 @@ class HarnessCatalog:
             return AgentPlayer2(
                 resolved.client,
                 AgentPlayer2Config(**settings),
+                cancellation_check,
+            )
+        if harness_id == AGENT_PLAYER_3_ID:
+            return AgentPlayer3(
+                resolved.client,
+                AgentPlayer3Config(**settings),
                 cancellation_check,
             )
         raise UnknownHarnessError(f"Unknown harness version: {harness_id}")

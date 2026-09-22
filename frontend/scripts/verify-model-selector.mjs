@@ -19,6 +19,7 @@ const harnesses = [
   { id: "baseline-direct-submit-langgraph-v1", name: "Baseline", summary: "Direct legal move submission." },
   { id: "agent-player-1-langgraph-v1", name: "Agent Player 1", summary: "Defense, attack, and synthesis." },
   { id: "agent-player-2-langgraph-v1", name: "Agent Player 2", summary: "Single synthesis phase." },
+  { id: "agent-player-3-langgraph-v1", name: "Agent Player 3", summary: "Native Responses API tool calls." },
 ].map((harness) => ({ ...harness, version: harness.id }));
 const position = {
   id: "before_queen_blunder",
@@ -84,7 +85,14 @@ try {
         }
         if (path === "/api/positional-testing/runs") {
           await new Promise((resolveRun) => { releaseRun = resolveRun; });
-          return respond(runResult);
+          const harness = harnesses.find(({ id }) => id === request.postDataJSON().harnessId);
+          return respond({
+            ...runResult,
+            harnessId: harness.id,
+            harnessName: harness.name,
+            harnessVersion: harness.version,
+            model: harness.id === harnesses[3].id ? "gpt-5.6-terra" : runResult.model,
+          });
         }
       }
       throw new Error(`Unexpected request: ${request.method()} ${path}`);
@@ -93,13 +101,13 @@ try {
     await page.goto(appUrl, { waitUntil: "networkidle" });
     const selector = page.getByRole("combobox", { name: "Requested model" });
     assert.equal(await selector.inputValue(), "qwen");
-    assert.deepEqual(await selector.locator("option").allTextContents(), ["Qwen", "GPT Luna"]);
+    assert.deepEqual(await selector.locator("option").allTextContents(), ["Qwen", "GPT Terra"]);
     assert.equal(await page.locator(".model-settings__reasoning dd").innerText(), "Medium");
     await page.getByText("LM Studio", { exact: true }).waitFor();
 
-    for (const modelId of ["qwen", "gpt-luna"]) {
+    for (const modelId of ["qwen", "gpt-terra"]) {
       await selector.selectOption(modelId);
-      assert.equal(await page.locator("#model-routing-status").innerText(), modelId === "gpt-luna" ? "OpenAI API" : "LM Studio");
+      assert.equal(await page.locator("#model-routing-status").innerText(), modelId === "gpt-terra" ? "OpenAI API" : "LM Studio");
       await page.getByRole("button", { name: "Start match", exact: true }).click();
       await page.getByText("Synthetic match response; no match was started.", { exact: false }).waitFor();
       assert.deepEqual(requests.at(-1), {
@@ -114,13 +122,27 @@ try {
       assert.equal(await selector.isEnabled(), true);
     }
 
+    await page.getByRole("combobox", { name: "White harness" }).selectOption(harnesses[3].id);
+    await page.getByRole("combobox", { name: "Black harness" }).selectOption(harnesses[3].id);
+    await page.getByRole("button", { name: "Start match", exact: true }).click();
+    await page.getByText("Synthetic match response; no match was started.", { exact: false }).waitFor();
+    assert.deepEqual(requests.at(-1), {
+      path: "/api/matches",
+      body: {
+        whiteHarnessId: harnesses[3].id,
+        blackHarnessId: harnesses[3].id,
+        folderId: null,
+        modelSelection: { modelId: "gpt-terra", reasoningEffort: "medium" },
+      },
+    });
+
     await page.getByRole("button", { name: "Positional testing", exact: true }).click();
-    assert.equal(await selector.inputValue(), "gpt-luna");
+    assert.equal(await selector.inputValue(), "gpt-terra");
     await page.getByRole("button", { name: /Agent Player 1 Queen Blunder Test/ }).click();
     await page.locator(`input[value="${harnesses[2].id}"]`).check();
     assert.equal(await page.locator(".board-square").count(), 64);
 
-    for (const modelId of ["gpt-luna", "qwen"]) {
+    for (const modelId of ["gpt-terra", "qwen"]) {
       await selector.selectOption(modelId);
       await page.getByRole("button", { name: /Run once|Run again/, exact: true }).click();
       await page.getByRole("button", { name: /^Running one turn/ }).waitFor();
@@ -143,7 +165,21 @@ try {
       await page.getByText(runResult.model, { exact: true }).waitFor();
     }
 
-    await selector.selectOption("gpt-luna");
+    await selector.selectOption("gpt-terra");
+    await page.locator(`input[value="${harnesses[3].id}"]`).check();
+    await page.getByRole("button", { name: /Run once|Run again/, exact: true }).click();
+    await page.getByRole("button", { name: /^Running one turn/ }).waitFor();
+    assert.deepEqual(requests.at(-1), {
+      path: "/api/positional-testing/runs",
+      body: {
+        positionId: position.id,
+        harnessId: harnesses[3].id,
+        modelSelection: { modelId: "gpt-terra", reasoningEffort: "medium" },
+      },
+    });
+    releaseRun();
+    await page.getByRole("heading", { name: "Proposed move", exact: true }).waitFor();
+    await page.getByText("gpt-5.6-terra", { exact: true }).waitFor();
     await selector.focus();
     assert.notEqual(await selector.evaluate((element) => getComputedStyle(element).outlineStyle), "none");
     await page.evaluate(async () => {
@@ -167,7 +203,7 @@ try {
     }
     await page.screenshot({ path: resolve(reviewDirectory, `model-selector-${viewport.name}.png`), fullPage: true, animations: "disabled" });
     assert.deepEqual(errors, []);
-    assert.equal(requests.length, 4);
+    assert.equal(requests.length, 6);
     results.push({ viewport: viewport.name, requests: requests.length, errors, layout: "passed" });
     await page.close();
   }

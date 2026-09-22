@@ -5,7 +5,7 @@ export type TraceStatus = "complete" | "active" | "failed";
 
 // Backend allowlisted model selection, resolved once per run.
 export interface ModelSelection {
-  modelId: "qwen" | "gpt-luna";
+  modelId: "qwen" | "gpt-terra";
   reasoningEffort: "medium";
 }
 

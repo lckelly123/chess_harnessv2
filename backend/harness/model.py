@@ -5,6 +5,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from langsmith.wrappers import wrap_openai
@@ -20,6 +21,15 @@ from openai import (
 from harness.contracts import HarnessError
 
 
+@dataclass(frozen=True, slots=True)
+class NativeToolTurn:
+    """Opt-in native tool transport; existing text-tool callers remain unchanged."""
+
+    tools: list[dict[str, Any]]
+    function_name: str
+    history: list[dict[str, Any]]
+
+
 class Model(Protocol):
     async def complete(
         self,
@@ -30,6 +40,7 @@ class Model(Protocol):
         reasoning_effort: str,
         max_output_tokens: int,
         forced_retry: bool,
+        native_turn: NativeToolTurn | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -128,19 +139,31 @@ class _ResponsesModel:
         reasoning_effort: str,
         max_output_tokens: int,
         forced_retry: bool,
+        native_turn: NativeToolTurn | None = None,
     ) -> dict[str, Any]:
+        history = native_turn.history if native_turn else []
+        options: dict[str, Any] = {}
+        if native_turn is not None:
+            options.update(
+                tools=native_turn.tools,
+                tool_choice={"type": "function", "name": native_turn.function_name},
+                parallel_tool_calls=False,
+            )
+            if self.provider == "openai":
+                options["include"] = ["reasoning.encrypted_content"]
         try:
             response = await self.client.responses.create(
                 model=model,
                 input=[
                     {"role": "developer", "content": instructions},
+                    *history,
                     {"role": "user", "content": dynamic_input},
                 ],
                 reasoning={"effort": reasoning_effort},
                 max_output_tokens=max_output_tokens,
                 store=False,
-                # Both providers use the same text-tool protocol, without
-                # native tools, conversation IDs, or provider-side history.
+                # History is scoped to a harness turn, never a shared client.
+                **options,
                 langsmith_extra={
                     "name": f"{self.label} forced tool retry"
                     if forced_retry
@@ -171,7 +194,8 @@ class _ResponsesModel:
             raise HarnessError(
                 f"{self.label} request for {model} failed (HTTP {exc.status_code})."
             ) from exc
-        payload = response.model_dump(mode="json")
+        # Preserve API field names and omit SDK defaults when replaying output.
+        payload = response.to_dict(mode="json")
         if payload.get("status") in {"failed", "cancelled"}:
             raise HarnessError(f"{self.label} response status: {payload['status']}.")
         return payload
@@ -210,7 +234,7 @@ class OpenAIModel(_ResponsesModel):
             key = (api_key or os.getenv("OPENAI_API_KEY") or "").strip()
             if not key:
                 raise ModelResolutionError(
-                    "GPT Luna requires OPENAI_API_KEY in the backend environment."
+                    "GPT Terra requires OPENAI_API_KEY in the backend environment."
                 )
             client = AsyncOpenAI(
                 base_url="https://api.openai.com/v1",

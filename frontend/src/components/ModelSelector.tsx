@@ -23,7 +23,7 @@ export function ModelSelector({ selection, disabled, onChange }: ModelSelectorPr
           })}
         >
           <option value="qwen">Qwen</option>
-          <option value="gpt-luna">GPT Luna</option>
+          <option value="gpt-terra">GPT Terra</option>
         </select>
       </label>
       <dl className="model-settings__reasoning">
@@ -31,7 +31,7 @@ export function ModelSelector({ selection, disabled, onChange }: ModelSelectorPr
       </dl>
       <p id="model-routing-status" className="model-settings__status">
         <Server size={15} aria-hidden="true" />
-        <span>{selection.modelId === "gpt-luna" ? "OpenAI API" : "LM Studio"}</span>
+        <span>{selection.modelId === "gpt-terra" ? "OpenAI API" : "LM Studio"}</span>
       </p>
     </section>
   );

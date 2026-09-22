@@ -109,7 +109,7 @@ class MatchList(ApiModel):
 class ModelSelection(ApiModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    model_id: Literal["qwen", "gpt-luna"]
+    model_id: Literal["qwen", "gpt-terra"]
     reasoning_effort: Literal["medium"] = "medium"
 
 
