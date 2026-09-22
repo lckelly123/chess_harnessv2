@@ -39,8 +39,8 @@ export function HistoryList({
       <header className="history-header">
         <div className="section-heading">
           <div>
-            <h2>Match records</h2>
-            <p>Search by id, player, version, status, or result</p>
+            <h2>Recorded matches</h2>
+            <p>Search by player, version, result, or ID.</p>
           </div>
           <span>{loading ? "Searching…" : `${total} found`}</span>
         </div>
@@ -60,17 +60,20 @@ export function HistoryList({
               role="listitem"
               key={match.id}
             >
-              <button className="history-open" type="button" onClick={() => onOpen(match.id)}>
-                <span className="history-id">{match.id}</span>
+              <button className="history-open" type="button" aria-current={selectedId === match.id ? "true" : undefined} onClick={() => onOpen(match.id)}>
+                <span className="history-record">
                 <span className="history-players">
-                  <strong>{match.white.name} <small>{match.white.version}</small></strong>
+                  <strong>{match.white.name}</strong>
                   <span>vs</span>
-                  <strong>{match.black.name} <small>{match.black.version}</small></strong>
+                  <strong>{match.black.name}</strong>
+                </span>
+                <span className="history-id">{match.id}</span>
                 </span>
                 <span className="history-date">{formatDate(match.startedAt)}</span>
-                <span className={`history-result history-result--${match.status}`}>{match.result ?? match.status}</span>
+                <span className={`history-result history-result--${match.status}`}>{match.result === "aborted" ? "stopped" : match.result ?? match.status}</span>
                 <ArrowRight size={16} aria-hidden="true" />
               </button>
+              <details className="history-versions"><summary>Harness versions</summary><span>White · {match.white.version}</span><span>Black · {match.black.version}</span></details>
               <div className="history-folder-cell">
                 <label className="history-folder-control">
                   <Folder size={14} aria-hidden="true" />

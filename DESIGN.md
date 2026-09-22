@@ -1,268 +1,267 @@
 ---
 name: "Chess Harness v2"
-description: "A tournament arbiter's ledger for inspectable agent-versus-agent chess matches."
+description: "A black and purple analysis workbench for inspectable chess agents."
 colors:
-  desk-backdrop: "#d9dedb"
-  ink: "#1c2723"
-  ink-soft: "#53615b"
-  paper: "#f5f1e7"
-  paper-deep: "#e9e3d4"
-  green: "#244c40"
-  green-raised: "#316657"
-  green-wash: "#dbe8df"
-  rust: "#a34131"
-  rust-deep: "#7e2f24"
-  rule: "#a8aea7"
-  rule-dark: "#68736d"
-  white-square: "#e7dbc2"
-  black-square: "#567769"
-  focus: "#0a67a3"
+  background: "#0d0c10"
+  sidebar: "#121016"
+  surface: "#17151e"
+  surface-raised: "#1e1b27"
+  surface-hover: "#262131"
+  field: "#111015"
+  ink: "#f2eff8"
+  ink-soft: "#b4adbf"
+  muted: "#a49bb4"
+  accent: "#b89afc"
+  accent-solid: "#7950d5"
+  accent-hover: "#8860df"
+  accent-wash: "#2c2143"
+  rule: "#35303f"
+  rule-soft: "#292531"
+  success: "#93d4b4"
+  danger: "#f0a7b3"
+  danger-wash: "#39222c"
+  warning: "#dfc58d"
+  white-square: "#bcb1ce"
+  black-square: "#695783"
+  focus: "#c9b0ff"
 typography:
   headline:
-    fontFamily: '"Archivo Variable", "Arial Narrow", sans-serif'
-    fontSize: "19px"
-    fontWeight: 700
+    fontFamily: '"Archivo Variable", "Segoe UI", sans-serif'
+    fontSize: "27px"
+    fontWeight: 600
     lineHeight: 1.2
     letterSpacing: "-0.025em"
   title:
-    fontFamily: '"Archivo Variable", "Arial Narrow", sans-serif'
-    fontSize: "16px"
-    fontWeight: 700
-    letterSpacing: "-0.02em"
+    fontFamily: '"Archivo Variable", "Segoe UI", sans-serif'
+    fontSize: "15px"
+    fontWeight: 600
+    letterSpacing: "-0.025em"
   body:
-    fontFamily: '"Segoe UI Variable", "Aptos", "Helvetica Neue", Arial, sans-serif'
-    fontSize: "13px"
+    fontFamily: '"Archivo Variable", "Segoe UI", sans-serif'
+    fontSize: "14px"
     fontWeight: 400
-    lineHeight: 1.45
+    lineHeight: 1.75
+  control:
+    fontFamily: '"Archivo Variable", "Segoe UI", sans-serif'
+    fontSize: "13px"
+    fontWeight: 600
   label:
-    fontFamily: '"Archivo Variable", "Arial Narrow", sans-serif'
+    fontFamily: '"Archivo Variable", "Segoe UI", sans-serif'
     fontSize: "11px"
-    fontWeight: 800
-    letterSpacing: "0.04em"
+    fontWeight: 400
   data:
-    fontFamily: 'ui-monospace, "Cascadia Mono", Consolas, monospace'
-    fontSize: "10px"
-    fontWeight: 800
-    letterSpacing: "0.04em"
+    fontFamily: '"Cascadia Code", Consolas, monospace'
+    fontSize: "11px"
+    fontWeight: 400
+    lineHeight: 1.5
 rounded:
-  registration: "2px"
-  board: "4px"
+  badge: "5px"
+  compact: "6px"
+  icon: "7px"
   control: "8px"
-  surface: "12px"
-  pill: "999px"
+  notice: "9px"
+  surface: "14px"
 spacing:
   micro: "4px"
+  tight: "6px"
   compact: "8px"
   control: "12px"
   standard: "16px"
-  panel: "18px"
-  wide: "24px"
+  inset: "18px"
+  panel: "20px"
+  generous: "24px"
 components:
   button-primary:
-    backgroundColor: "{colors.green}"
-    textColor: "#fffdf7"
-    typography: "{typography.label}"
+    backgroundColor: "{colors.accent-solid}"
+    textColor: "#fff"
+    typography: "{typography.control}"
     rounded: "{rounded.control}"
-    padding: "0 14px"
+    padding: "0 16px"
     height: "42px"
   button-primary-hover:
-    backgroundColor: "{colors.green-raised}"
-    textColor: "#fffdf7"
-    typography: "{typography.label}"
+    backgroundColor: "{colors.accent-hover}"
+  button-secondary:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink-soft}"
+    typography: "{typography.control}"
     rounded: "{rounded.control}"
-    padding: "0 14px"
+    padding: "0 16px"
     height: "42px"
   button-danger:
-    backgroundColor: "#ead4cc"
-    textColor: "{colors.rust-deep}"
-    typography: "{typography.label}"
-    rounded: "7px"
-    padding: "0 9px"
-    height: "32px"
+    backgroundColor: "{colors.danger-wash}"
+    textColor: "{colors.danger}"
+    rounded: "{rounded.compact}"
+    padding: "0 8px"
+    height: "30px"
   field:
-    backgroundColor: "#fffdf7"
+    backgroundColor: "{colors.field}"
     textColor: "{colors.ink}"
-    typography: "{typography.body}"
     rounded: "{rounded.control}"
     padding: "0 12px"
     height: "42px"
-  ledger-surface:
-    backgroundColor: "{colors.paper}"
+  navigation-item:
+    textColor: "{colors.ink-soft}"
+    rounded: "{rounded.control}"
+    padding: "0 12px"
+    height: "44px"
+  panel:
+    backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
     rounded: "{rounded.surface}"
-    padding: "{spacing.standard}"
   status-running:
-    backgroundColor: "#cae4d4"
-    textColor: "#174434"
-    typography: "{typography.data}"
-    rounded: "{rounded.pill}"
-    padding: "5px 9px"
-  registration-mark:
-    backgroundColor: "{colors.rust}"
-    rounded: "{rounded.registration}"
-    size: "14px"
-  trace-active:
-    backgroundColor: "{colors.green-wash}"
+    backgroundColor: "#1c332b"
+    textColor: "{colors.success}"
+    rounded: "{rounded.badge}"
+    padding: "4px 8px"
+  trace-selection:
+    backgroundColor: "{colors.accent-wash}"
     textColor: "{colors.ink}"
-    typography: "{typography.body}"
-    padding: "13px 15px"
+    rounded: "{rounded.control}"
 ---
 
 # Design System: Chess Harness v2
 
 ## Overview
 
-**Creative North Star: "The Arbiter's Ledger"**
+**Creative North Star: "The Analysis Workbench"**
 
-The Arbiter's Ledger treats every position, notation, and causal trace as one signed record. Its visual world is calm but unmistakable: vellum sheets sit on a cool desk, graphite rules turn dense evidence into a readable register, tournament green establishes authority, and rust marks the exact place where attention or intervention is required.
+Near-black graphite surfaces and violet selection give chess research a calm, concentrated workspace. The user specified black and purple; the analysis-workbench composition was selected within the delegated redesign. Archivo supplies crisp headings and readable evidence, while the lavender board carries the largest continuous color field.
 
-The system is flat, compact, and documentary rather than game-like. Square board cells, ruled rows, tabular annotations, and restrained type create the feeling of a working tournament desk; tonal shifts carry hierarchy while rare registration marks keep the current ply visible across the record. It explicitly refuses the detached board-plus-generic-dashboard pattern.
+Restrained containers, one-pixel divisions, and explicit state support sustained inspection. Dense records sit beside generous explanation text. The board, selected ply, and recorded decision remain connected; setup and secondary metadata unfold when needed.
 
 **Key Characteristics:**
 
-- Vellum surfaces on a cool neutral desk
-- Tournament green authority with rust registration marks
-- Graphite rules, square ledger cells, and compact tabular evidence
-- Position, notation, and causal trace treated as one synchronized record
-- Flat tonal layering with narrowly reserved shadows
+- Near-black surfaces with violet actions and selections
+- Lavender board squares with outlined move endpoints
+- Archivo interface text with monospace identifiers
+- Flat tonal layers and quiet one-pixel divisions
+- Synchronized position, selected explanation, and chronology
 
 ## Colors
 
-The palette feels archival and operational: warm papers and cool graphite neutrals support a restrained tournament green, while rust appears only where the record needs an unmistakable mark.
+Black and violet form the identity; mint, rose, and amber have specific status meanings. The frontmatter preserves the CSS source values.
 
 ### Primary
 
-- **Tournament Green** (`#244c40`): anchors the sticky header, primary controls, selection color, and authoritative metadata.
-- **Raised Tournament Green** (`#316657`): provides the primary interactive hover state without changing the material character.
-- **Tournament Wash** (`#dbe8df`): identifies active rows, the side to move, selected records, and low-emphasis hover feedback.
+- **Violet Signal** (`accent`): icons, selected metadata, and proposed-move notation.
+- **Action Violet** (`accent-solid`) and **Raised Violet** (`accent-hover`): primary commands, playback, and their hover state.
+- **Violet Wash** (`accent-wash`): selected navigation, active ply groups, and selected harnesses.
+- **Focus Lavender** (`focus`): shared keyboard outline.
 
 ### Secondary
 
-- **Rust Registration** (`#a34131`): marks changed squares, the replay diamond, active trace registration, and destructive hover states.
-- **Deep Rust** (`#7e2f24`): carries destructive labels and current-move notation before activation.
+- **Success Mint** (`success`): running status, return-to-live context, and positional completion.
+- **Error Rose** (`danger`) on **Rose Wash** (`danger-wash`): failures and the stop action.
+- **Queue Amber** (`warning`): queued status.
 
 ### Tertiary
 
-- **Light Ledger Square** (`#e7dbc2`): the board's warm light field.
-- **Dark Ledger Square** (`#567769`): the board's muted green field.
-- **Focus Blue** (`#0a67a3`): reserved for high-contrast keyboard focus outlines.
+- **Light Lavender Square** (`white-square`) and **Deep Lavender Square** (`black-square`): alternating board fields. Endpoint outlines adjust contrast against each square color.
 
 ### Neutral
 
-- **Desk Backdrop** (`#d9dedb`): the cool field behind the ledger sheets.
-- **Graphite Ink** (`#1c2723`): primary copy, piece strokes, and decisive labels.
-- **Muted Graphite** (`#53615b`): supporting descriptions and secondary facts.
-- **Vellum** (`#f5f1e7`): the default ledger surface.
-- **Deep Vellum** (`#e9e3d4`): recessed tracks and secondary paper regions.
-- **Graphite Rule** (`#a8aea7`): ordinary card, row, and section rules.
-- **Dark Graphite Rule** (`#68736d`): field outlines, markers, and stronger structural boundaries.
+- **Near Black** (`background`) and **Sidebar Graphite** (`sidebar`): workspace and persistent navigation.
+- **Graphite Surface** (`surface`), **Raised Graphite** (`surface-raised`), and **Hover Graphite** (`surface-hover`): panels, inset controls, and feedback.
+- **Recessed Field** (`field`): inputs and search.
+- **Pale Ink** (`ink`), **Soft Ink** (`ink-soft`), and **Muted Lavender** (`muted`): primary content, supporting copy, and metadata.
+- **Graphite Rule** (`rule`) and **Quiet Rule** (`rule-soft`): container outlines and internal divisions.
 
-**The Registration Rule.** Rust is a locating device, not decoration: use it for the active move, an intervention, or a failed state, and keep routine actions green or neutral.
+**The Selection Rule.** Violet identifies the action or evidence currently in focus; semantic statuses retain their own text and color.
 
 ## Typography
 
-**Display Font:** Archivo Variable (with Arial Narrow fallback)
-**Body Font:** Segoe UI Variable (with Aptos, Helvetica Neue, Arial fallbacks)
-**Label/Mono Font:** UI monospace (with Cascadia Mono and Consolas fallbacks)
+**Display Font:** Archivo Variable (with Segoe UI and sans-serif fallback)
+**Body Font:** Archivo Variable (with Segoe UI and sans-serif fallback)
+**Label/Mono Font:** Cascadia Code (with Consolas and monospace fallback)
 
-**Character:** Archivo gives headings and controls the compact authority of printed tournament forms, while Segoe keeps sustained interface reading neutral and clear. Monospace type turns versions, plies, clocks, record ids, and event metadata into evidence that aligns cleanly.
+**Character:** One locally bundled variable family connects navigation, controls, and explanations. Moderate heading weights and sentence case keep the workspace quiet; monospace is reserved for identifiers, versions, and machine notation.
 
 ### Hierarchy
 
-- **Headline** (700, `19px`, `1.2`): section and match titles, tightened slightly to keep dense headers decisive.
-- **Title** (700, `16px`): the compact brand title and other small identity-level headings.
-- **Body** (400, `13px`, `1.45`): event summaries, field content, and operational explanatory copy; trace detail stays within roughly `64ch`.
-- **Label** (800, `11px`, `0.04em`, uppercase): field labels, replay labels, and terse docket annotations.
-- **Data** (800, `10px`, `0.04em`, tabular where numeric): record ids, versions, clocks, counts, phases, and plies.
+- **Headline** (600, 27px, 1.2): workspace titles; responsive sizes step to 25px, 23px, and 22px.
+- **Title** (600, 15px): recurring section headings. Larger panel headings use 17–19px; selected-move summaries use 18px with 1.35 line height.
+- **Body** (400, 14px, 1.75): explanations and phase reports, bounded to 70–75ch where space permits. Short operational copy usually uses 12–13px.
+- **Control** (600, 13px): primary and secondary actions; navigation uses the same size at weight 500.
+- **Label** (400, 11px): supporting metadata and field context. Counts and replay positions use tabular numerals.
+- **Data** (400, 11px, 1.5): version strings and saved-position metadata; secondary record identifiers can use 10px.
 
-**The Evidence Hierarchy Rule.** Prose explains; Archivo labels; monospace proves. Do not use decorative type to imitate chess culture.
+**The Evidence Hierarchy Rule.** Give explanations more reading space than metadata, and keep identifiers visually subordinate to the decision they describe.
 
 ## Layout
 
-The shipped match desk uses a centered canvas capped at `1440px`, with `16px` gaps and ruled vellum regions. At wide widths, the current position and causal trace remain adjacent; below `900px` they stack in reading order, and below `620px` controls, player registers, replay transport, and record rows recompose for one-handed scanning. These measurements document this route's evidence-heavy composition, not a universal template for every future screen.
+The shell has a sticky full-height navigation column (208px; 188px below 1250px) and a flexible main region capped at 1576px. Desktop content uses 28px outer padding, 16–24px region gaps, and tighter 4–12px spacing inside controls. Panel insets generally fall between 16px and 22px.
 
-Spacing stays on a compact rhythm (`4px`, `8px`, `12px`, `16px`, `18px`, `24px`). Dense metadata remains close to the fact it qualifies, while larger gaps separate functional regions. Responsive changes preserve the narrative sequence—setup, status, position, trace, records—without shrinking the board into illegibility.
+The Match desk pairs position and replay with selected explanation and chronology. The board is bounded by available width, viewport height, and a 650px desktop maximum. The trace scrolls independently. Match library and Positional testing place their index beside the main content when space permits.
 
-**The Adjacency Rule.** On investigative surfaces, keep the artifact under inspection and the evidence that explains it adjacent when space permits; when they stack, preserve their causal reading order.
+At 1250px, columns compact and the positional index becomes horizontal. At 1000px, navigation becomes a horizontal header. At 760px, match panels stack, indexes scroll horizontally, and positional controls follow the board. At 480px, setup and library records become single-column and replay places its range on a separate line. The 1700px breakpoint gives the board column additional room.
+
+**The Adjacency Rule.** Keep the inspected position and its explanation adjacent when width permits; on narrow screens, place explanation immediately after the board and replay controls.
 
 ## Elevation & Depth
 
-The system is flat by default. Vellum, deep paper, green wash, board fields, and graphite rules create separation through tone and line rather than floating cards. Shadows are reserved for the sticky header (`0 10px 30px rgb(24 39 33 / 18%)`), the board (`0 16px 28px rgb(35 48 42 / 22%)`), and the live environment dot (`0 2px 8px rgb(151 196 164 / 55%)`).
+Ordinary panels, navigation, buttons, and fields use no box shadows. Graphite tones, recessed fields, and one-pixel borders create depth. Chess pieces alone carry small SVG drop shadows for silhouette separation; these are not a surface-elevation scale.
 
-### Shadow Vocabulary
+**The Tonal Depth Rule.** Separate interface regions with surface tone and rules before introducing any new elevation effect.
 
-- **Sticky Authority** (`0 10px 30px rgb(24 39 33 / 18%)`): keeps the tournament-green header legible as content moves beneath it.
-- **Board Object** (`0 16px 28px rgb(35 48 42 / 22%)`): gives the physical board the sole substantial lift in the workspace.
-- **Live Signal** (`0 2px 8px rgb(151 196 164 / 55%)`): a compact glow that communicates local live presence without coloring an entire region.
-
-**The Flat-by-Default Rule.** Use tonal layering and graphite rules for ordinary hierarchy; do not add shadow to routine cards, rows, inputs, or buttons.
+State changes use color transitions (160ms, ease-out). Selected explanation content enters over 180ms with a 3px movement; loading indicators rotate over 1s. Reduced-motion preference disables animations and transitions.
 
 ## Shapes
 
-Ledger surfaces use gently clipped corners (`12px`) so the desk remains approachable, while controls use tighter corners (`8px`) and the board stays nearly square (`4px`). Registration marks are square (`2px`) and rotated into diamonds; board cells and ruled rows remain square-edged. Pill geometry (`999px`) belongs to status badges and scrollbar thumbs, not to general containers.
-
-**The Registration Geometry Rule.** A rust diamond means “this exact point in the record”; keep that silhouette consistent across notation, replay, and trace.
+Main containers use moderately rounded corners (14px), controls use 8px, and compact buttons and disclosures use 6–7px. Status labels and the board boundary use 5px corners. Board cells remain square; circular trace markers distinguish events. The shared keyboard outline is 2px with a 3px offset.
 
 ## Components
 
-Components should feel like compact instruments on an arbiter's desk: sturdy, legible, and visibly stateful without ornamental chrome.
-
 ### Buttons
 
-- **Shape:** compact control corners (`8px`) with a minimum height of `42px`; the smaller stop action uses `7px` corners and a `32px` height.
-- **Primary:** tournament-green field, bright vellum text, heavy Archivo label, and horizontal padding of `14px`.
-- **Hover / Focus:** primary hover lifts tonally to raised green; all interactive controls receive a `3px` mixed-blue keyboard outline with `2px` offset.
-- **Danger:** pale rust at rest with deep-rust copy, becoming solid rust with bright text on hover. Disabled controls remain structurally visible at reduced opacity.
+Compact and explicit, with an SVG icon when it clarifies the action.
+
+- **Primary:** violet, white text, 42px minimum height, and 16px horizontal padding.
+- **Secondary:** raised graphite with a graphite border; hover lifts to the hover surface.
+- **Danger:** rose wash, rose text, and a restrained outline; stop is a compact 30px control.
+- **Hover / Focus:** brief color feedback and the common lavender outline. Disabled controls retain their structure at 0.48 opacity.
 
 ### Chips
 
-- **Style:** compact uppercase or tabular labels on semantic washes, with full pill rounding.
-- **State:** running is green, completed is graphite, stopped or failed is rust, and queued is ochre; wording remains present so color never carries status alone.
+Rectangular status badges use 5px corners and 4px by 8px padding. Running is mint, completed match status is violet, failed is rose, and queued is amber. Status words stay visible; positional completion also includes an icon.
 
 ### Cards / Containers
 
-- **Corner Style:** vellum ledger surfaces use `12px` corners; internal rows remain ruled and square.
-- **Background:** vellum for primary containers, deep vellum or green wash for recessed and active regions.
-- **Shadow Strategy:** none at rest; follow the reserved shadow vocabulary above.
-- **Border:** a `1px` graphite rule defines the container and its internal ledger divisions.
-- **Internal Padding:** usually `16px` or `18px`, reduced to `13px`–`14px` on narrow screens.
+Graphite panels use 14px corners, one-pixel borders, and no box shadow. Headers and bodies have separate insets so dividers span the panel. Lists use quiet row separators.
 
 ### Inputs / Fields
 
-- **Style:** bright paper field, dark graphite `1px` outline, `8px` corners, and a `42px` minimum height.
-- **Focus:** the shared high-contrast blue outline appears outside the field without displacing layout.
-- **Disabled:** retain the field silhouette and switch the cursor to unavailable; action-dependent disabled buttons use reduced opacity.
+Recessed fields use graphite outlines, 8px corners, 42px height, and explicit labels. Search pairs an inline SVG icon with its field and adds a violet border on focus-within. Errors stay near the affected action.
 
 ### Navigation
 
-- **Style:** the sticky tournament-green header is the sole elevated navigation surface. The checker mark, compact Archivo wordmark, uppercase subtitle, and live environment indicator stay horizontally economical; narrow screens retain the dot while visually suppressing its label.
+Match desk, Match library, and Positional testing share one visual world. Items pair SVG icons with sentence-case labels; the current destination receives violet wash, lavender text, a border, and an accessibility state. The desktop rail becomes a horizontal strip. Model controls remain in the shared shell.
 
-### Replay Registration
+### Selected Move and Trace
 
-The replay system is the signature component. A rust diamond on the square track aligns the active ply with current notation, changed board squares, and the active trace row. Transport controls are square, the main play control is green-filled, and the numeric position remains tabular.
+The selected-ply inspector shows the recorded summary and explanation above chronology. Disclosures expose full metadata and other events at that ply. The timeline groups events by ply with Moves and All events filters. Selecting a row synchronizes position and explanation; a violet wash and the word “Selected” identify the active group. Full-event disclosures retain timestamp, player, ply, phase, status, stable event ID, and detail.
 
-### Trace Ledger
+### Board and Replay
 
-Trace events are full-width ruled rows with a vertical chronology line. Completed markers are circular and quiet; the active marker becomes the same rust diamond used by replay and changed squares, while the row receives a green wash.
+Lavender squares, SVG pieces, and contrasting endpoint outlines anchor the position. Pieces use traditional silhouettes, curved tiered bases, and open details that remain readable on small boards. Ivory white pieces use a dark outline; graphite black pieces use a lavender outline and lighter internal details. Each SVG occupies 88% of its square, with shared proportions across both colors. Replay combines neutral icon buttons, violet playback, a circular range thumb, and tabular counts. Flipping changes perspective while the selected ply continues to drive analysis.
 
-### History Record
+### Setup, Library, and Positional Testing
 
-History rows behave like ledger entries rather than cards. Record id, versions, timestamp, and result align in compact columns on desktop, then collapse to a readable stacked entry on mobile; selection uses green wash plus an underlined id.
+Match setup expands from New match and opens automatically when no match is selected. Library records separate opening from folder assignment and disclose version identifiers. Positional testing uses saved-position rows and stacked harness radio choices; the selected choice reveals its description. Results emphasize violet move notation, justification, and phase reports. Route details and available harnesses belong in the surface brief.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** use paper and green washes to separate regions before adding elevation.
-- **Do** keep version identifiers, plies, clocks, and event metadata tabular and compact.
-- **Do** use rust to register the active move, destructive action, or failed state.
-- **Do** preserve a visible focus outline and pair every status color with text.
-- **Do** keep position, notation, and trace synchronized when a replay cursor is present.
+- **Do** use graphite tones and one-pixel rules to separate regions.
+- **Do** use violet consistently for actions, selection, and inspected evidence.
+- **Do** keep board, replay position, selected explanation, and trace synchronized.
+- **Do** pair status colors with words and preserve visible keyboard focus.
+- **Do** disclose secondary metadata without removing access to the complete record.
+- **Do** respect reduced motion and preserve readable content order on narrow screens.
 
 ### Don't:
 
-- **Don't** turn the product into a generic card dashboard detached from the chess position.
-- **Don't** add gradients, glass effects, ornamental textures, or casual game styling.
-- **Don't** scatter shadows across routine surfaces; reserve them for the header, board, and live dot.
-- **Don't** use rounded softness everywhere; preserve square cells, ruled rows, and compact controls.
-- **Don't** infer human move controls or editable agent behavior from spectator data.
+- **Don't** reintroduce the superseded cream, tournament-green, and rust identity.
+- **Don't** turn routine panels into elevated cards or add ornamental gradients and textures.
+- **Don't** promote small metadata styling into the main reading text.
+- **Don't** imply human move controls or frontend-authored decisions on the spectator board.

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, ArrowUpRight, ChevronDown, FlaskConical, LayoutGrid, Library, Plus, RotateCcw, Server, X } from "lucide-react";
 import { matchApi } from "./api/client";
 import type { GameFolder, HarnessVersion, MatchDetail, MatchSummary, ModelSelection } from "./api/contracts";
 import { Chessboard } from "./components/Chessboard";
@@ -14,7 +14,7 @@ import { TracePanel } from "./components/TracePanel";
 
 type DeskMode = "live" | "replay";
 type FolderFilter = "all" | "unfiled" | string;
-type WorkspaceSection = "matches" | "positional-testing";
+type WorkspaceSection = "matches" | "records" | "positional-testing";
 
 export default function App() {
   const [harnesses, setHarnesses] = useState<HarnessVersion[]>([]);
@@ -32,6 +32,8 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<DeskMode>("live");
   const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>("matches");
+  const [setupOpen, setSetupOpen] = useState(false);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [modelSelection, setModelSelection] = useState<ModelSelection>({
     modelId: "qwen",
     reasoningEffort: "medium",
@@ -139,10 +141,13 @@ export default function App() {
     return selectedMatch.positions.find((item) => item.ply === displayPly) ?? selectedMatch.positions.at(-1) ?? null;
   }, [displayPly, selectedMatch]);
 
-  const visibleTraces = useMemo(
-    () => selectedMatch?.traces.filter((event) => event.ply <= displayPly) ?? [],
-    [displayPly, selectedMatch],
-  );
+  const navigateWorkspace = (section: WorkspaceSection) => {
+    setWorkspaceSection(section);
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      headingRef.current?.focus({ preventScroll: true });
+    });
+  };
 
   const startMatch = async () => {
     setBusy(true);
@@ -158,6 +163,7 @@ export default function App() {
       setSelectedMatch(detail);
       setMode("live");
       setDisplayPly(detail.moveCount);
+      setSetupOpen(false);
       await Promise.all([
         refreshMatches(query, folderFilter),
         refreshFolders(),
@@ -188,6 +194,7 @@ export default function App() {
   const openRecord = async (matchId: string) => {
     try {
       await openMatch(matchId, "replay");
+      navigateWorkspace("matches");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "That match record could not be opened.");
     }
@@ -250,158 +257,99 @@ export default function App() {
         ? "Every recorded match is filed. Choose a named folder to browse it."
         : `This folder is empty. Select it under New match or move an existing record here.`;
 
+  const showSetup = setupOpen || (!loading && !selectedMatch);
+  const sectionTitle = workspaceSection === "matches" ? "Match desk" : workspaceSection === "records" ? "Match library" : "Positional testing";
+
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <a
-          className="brand"
-          href="#top"
-          aria-label="Chess Harness match desk"
-          onClick={() => setWorkspaceSection("matches")}
-        >
+      <aside className="app-sidebar">
+        <a className="brand" href="#top" onClick={() => navigateWorkspace("matches")} aria-label="Chess Harness match desk">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
-          <span><strong>Chess Harness</strong><small>Match desk · v2</small></span>
+          <span><strong>Chess Harness</strong><small>Agent research workspace</small></span>
         </a>
-        <div className="app-header__actions">
-          <nav className="workspace-nav" aria-label="Workspace sections">
-            <button
-              className={workspaceSection === "matches" ? "workspace-nav__button workspace-nav__button--active" : "workspace-nav__button"}
-              type="button"
-              aria-current={workspaceSection === "matches" ? "page" : undefined}
-              onClick={() => setWorkspaceSection("matches")}
-            >
-              Match desk
-            </button>
-            <button
-              className={workspaceSection === "positional-testing" ? "workspace-nav__button workspace-nav__button--active" : "workspace-nav__button"}
-              type="button"
-              aria-current={workspaceSection === "positional-testing" ? "page" : undefined}
-              onClick={() => setWorkspaceSection("positional-testing")}
-            >
-              Positional testing
-            </button>
-          </nav>
-          <div className="environment-mark">
-            <span className="environment-dot" />
-            Local agent runtime
-          </div>
+        <nav className="workspace-nav" aria-label="Workspace sections">
+          <button className={`workspace-nav__button ${workspaceSection === "matches" ? "workspace-nav__button--active" : ""}`} type="button" aria-current={workspaceSection === "matches" ? "page" : undefined} onClick={() => navigateWorkspace("matches")}>
+            <LayoutGrid size={18} aria-hidden="true" /><span>Match desk</span>
+          </button>
+          <button className={`workspace-nav__button ${workspaceSection === "records" ? "workspace-nav__button--active" : ""}`} type="button" aria-current={workspaceSection === "records" ? "page" : undefined} onClick={() => navigateWorkspace("records")}>
+            <Library size={18} aria-hidden="true" /><span>Match library</span><span className="nav-count">{allMatchCount}</span>
+          </button>
+          <button className={`workspace-nav__button ${workspaceSection === "positional-testing" ? "workspace-nav__button--active" : ""}`} type="button" aria-current={workspaceSection === "positional-testing" ? "page" : undefined} onClick={() => navigateWorkspace("positional-testing")}>
+            <FlaskConical size={18} aria-hidden="true" /><span>Positional testing</span>
+          </button>
+        </nav>
+        <div className="sidebar-settings">
+          <ModelSelector selection={modelSelection} disabled={busy || positionalRunning} onChange={setModelSelection} />
+          <div className="environment-mark"><Server size={15} aria-hidden="true" /><span>Local workspace</span><span className="version-mark">v2</span></div>
         </div>
-      </header>
+      </aside>
 
-      <main id="top">
-        <ModelSelector
-          selection={modelSelection}
-          disabled={busy || positionalRunning}
-          onChange={setModelSelection}
-        />
-        <div hidden={workspaceSection !== "matches"}>
-        <MatchDocket
-          harnesses={harnesses}
-          whiteId={whiteId}
-          blackId={blackId}
-          folders={folders}
-          folderId={startFolderId}
-          busy={busy || loading}
-          folderBusy={folderBusy}
-          folderError={folderError}
-          onWhiteChange={setWhiteId}
-          onBlackChange={setBlackId}
-          onFolderChange={setStartFolderId}
-          onCreateFolder={createFolder}
-          onStart={startMatch}
-        />
-
-        {error ? (
-          <div className="error-banner" role="alert">
-            <AlertTriangle size={18} aria-hidden="true" />
-            <span><strong>Backend request failed.</strong> {error}</span>
-            <button type="button" onClick={() => window.location.reload()}><RotateCcw size={15} aria-hidden="true" /> Reload</button>
-          </div>
-        ) : null}
-
-        {loading ? (
-          <div className="loading-state" aria-live="polite">Opening the match ledger…</div>
-        ) : !selectedMatch || !position ? (
-          <div className="loading-state">No matches yet. Choose two harnesses to begin.</div>
-        ) : (
-          <>
-            {mode === "replay" && activeMatchId && selectedMatch.id !== activeMatchId ? (
-              <button className="return-live" type="button" onClick={returnToLive}>
-                <span className="environment-dot" /> Return to active match
-              </button>
-            ) : null}
-            <div className="match-workspace">
-              <div className="board-column">
-                <MatchStatus
-                  match={selectedMatch}
-                  displayPly={displayPly}
-                  replaying={mode === "replay"}
-                  currentMove={position.san}
-                  canStop={mode === "live" && selectedMatch.id === activeMatchId && selectedMatch.status === "running"}
-                  busy={busy}
-                  onStop={stopMatch}
-                />
-                <Chessboard position={position} flipped={flipped} />
-                <ReplayControls
-                  ply={displayPly}
-                  maxPly={selectedMatch.moveCount}
-                  playing={playing}
-                  onChange={(ply) => { setDisplayPly(Math.max(0, Math.min(ply, selectedMatch.moveCount))); setPlaying(false); }}
-                  onTogglePlaying={() => {
-                    if (!playing && displayPly === selectedMatch.moveCount) setDisplayPly(0);
-                    setPlaying((value) => !value);
-                  }}
-                  onFlip={() => setFlipped((value) => !value)}
-                />
-              </div>
-              <TracePanel
-                events={visibleTraces}
-                activePly={displayPly}
-                onSelectPly={(ply) => { setDisplayPly(ply); setMode("replay"); setPlaying(false); }}
-              />
+      <div className="app-content">
+        <main id="top">
+          <header className="workspace-heading">
+            <div>
+              <h1 ref={headingRef} tabIndex={-1}>{sectionTitle}</h1>
+              <p>{workspaceSection === "matches" ? "Every position. Every decision." : workspaceSection === "records" ? "Find a run. Revisit the reasoning." : "One position. One agent. One decision."}</p>
             </div>
-          </>
-        )}
+            {workspaceSection === "matches" && selectedMatch ? (
+              <button className={`button ${showSetup ? "button--secondary" : "button--primary"}`} type="button" aria-expanded={showSetup} aria-controls="match-setup" onClick={() => setSetupOpen((value) => !value)}>
+                {showSetup ? <X size={17} aria-hidden="true" /> : <Plus size={17} aria-hidden="true" />}
+                {showSetup ? "Match setup" : "New match"}
+              </button>
+            ) : workspaceSection === "records" ? (
+              <button className="button button--primary" type="button" onClick={() => { setSetupOpen(true); navigateWorkspace("matches"); }}><Plus size={17} aria-hidden="true" />New match</button>
+            ) : null}
+          </header>
 
-        <div className="records-workspace">
-          <FolderRail
-            folders={folders}
-            totalMatches={allMatchCount}
-            unfiledCount={unfiledCount}
-            selectedId={folderFilter}
-            creating={folderBusy}
-            createError={folderError}
-            onSelect={setFolderFilter}
-            onCreate={createFolder}
-          />
-          <HistoryList
-            matches={matches}
-            total={totalMatches}
-            query={query}
-            selectedId={selectedMatch?.id ?? null}
-            loading={loading}
-            folders={folders}
-            assigningId={assigningMatchId}
-            assignmentError={assignmentError}
-            emptyMessage={emptyHistoryMessage}
-            onQueryChange={setQuery}
-            onOpen={openRecord}
-            onAssignFolder={assignMatchFolder}
-          />
-        </div>
-        </div>
-        <div hidden={workspaceSection !== "positional-testing"}>
-          <PositionalTesting
-            modelSelection={modelSelection}
-            running={positionalRunning}
-            onRunningChange={setPositionalRunning}
-          />
-        </div>
-      </main>
-      <footer>
-        <span>Authoritative chess state and agent execution run in the local backend.</span>
-        <span>Frontend contract: REST snapshots · detailed execution traces in LangSmith.</span>
-      </footer>
+          <div hidden={workspaceSection !== "matches"}>
+            <div id="match-setup" className="match-setup" hidden={!showSetup}>
+              <MatchDocket harnesses={harnesses} whiteId={whiteId} blackId={blackId} folders={folders} folderId={startFolderId} busy={busy || loading} folderBusy={folderBusy} folderError={folderError} onWhiteChange={setWhiteId} onBlackChange={setBlackId} onFolderChange={setStartFolderId} onCreateFolder={createFolder} onStart={startMatch} />
+            </div>
+            {error ? (
+              <div className="error-banner" role="alert">
+                <AlertTriangle size={18} aria-hidden="true" /><span><strong>Backend request failed.</strong> {error}</span>
+                <button type="button" onClick={() => window.location.reload()}><RotateCcw size={15} aria-hidden="true" />Reload</button>
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="loading-state" aria-live="polite"><span className="loading-board" aria-hidden="true" /><h2>Opening your workspace</h2><p>Loading matches and harnesses…</p></div>
+            ) : !selectedMatch || !position ? (
+              <div className="loading-state"><LayoutGrid size={32} aria-hidden="true" /><h2>Your first match starts here</h2><p>Choose the white and black harnesses above, then start a match to inspect every move.</p></div>
+            ) : (
+              <>
+                {mode === "replay" && activeMatchId ? (
+                  <button className="return-live" type="button" onClick={returnToLive}><span className="environment-dot" />Return to active match<ArrowUpRight size={15} aria-hidden="true" /></button>
+                ) : null}
+                <div className="match-workspace">
+                  <div className="board-column">
+                    <MatchStatus match={selectedMatch} displayPly={displayPly} replaying={mode === "replay"} currentMove={position.san} canStop={selectedMatch.id === activeMatchId && selectedMatch.status === "running"} busy={busy} onStop={stopMatch} />
+                    <Chessboard position={position} flipped={flipped} />
+                    <ReplayControls ply={displayPly} maxPly={selectedMatch.moveCount} playing={playing} onChange={(ply) => { setDisplayPly(Math.max(0, Math.min(ply, selectedMatch.moveCount))); setMode("replay"); setPlaying(false); }} onTogglePlaying={() => { if (!playing && displayPly === selectedMatch.moveCount) setDisplayPly(0); setMode("replay"); setPlaying((value) => !value); }} onFlip={() => setFlipped((value) => !value)} />
+                    <div className="board-caption"><span>Position {displayPly} of {selectedMatch.moveCount}</span><span>{flipped ? "Black" : "White"} perspective</span></div>
+                  </div>
+                  <TracePanel events={selectedMatch.traces} activePly={displayPly} onSelectPly={(ply) => { setDisplayPly(Math.max(0, Math.min(ply, selectedMatch.moveCount))); setMode("replay"); setPlaying(false); }} />
+                </div>
+                <details className="match-details">
+                  <summary>Match details<ChevronDown size={15} aria-hidden="true" /><span>{selectedMatch.id}</span></summary>
+                  <dl><div><dt>White version</dt><dd>{selectedMatch.white.version}</dd></div><div><dt>Black version</dt><dd>{selectedMatch.black.version}</dd></div><div><dt>Result</dt><dd>{selectedMatch.result ?? "Pending"}</dd></div><div><dt>Termination</dt><dd>{selectedMatch.terminationReason ?? "Match in progress"}</dd></div></dl>
+                </details>
+              </>
+            )}
+          </div>
+
+          <div hidden={workspaceSection !== "records"}>
+            {error ? <div className="error-banner" role="alert"><AlertTriangle size={18} aria-hidden="true" /><span>{error}</span></div> : null}
+            <div className="records-workspace">
+              <FolderRail folders={folders} totalMatches={allMatchCount} unfiledCount={unfiledCount} selectedId={folderFilter} creating={folderBusy} createError={folderError} onSelect={setFolderFilter} onCreate={createFolder} />
+              <HistoryList matches={matches} total={totalMatches} query={query} selectedId={selectedMatch?.id ?? null} loading={loading} folders={folders} assigningId={assigningMatchId} assignmentError={assignmentError} emptyMessage={emptyHistoryMessage} onQueryChange={setQuery} onOpen={openRecord} onAssignFolder={assignMatchFolder} />
+            </div>
+          </div>
+          <div hidden={workspaceSection !== "positional-testing"}>
+            <PositionalTesting modelSelection={modelSelection} running={positionalRunning} onRunningChange={setPositionalRunning} />
+          </div>
+        </main>
+        <footer><span>Chess Harness <span aria-hidden="true">/</span> Agent research</span><span>Backend-verified positions · Public decision traces</span></footer>
+      </div>
     </div>
   );
 }

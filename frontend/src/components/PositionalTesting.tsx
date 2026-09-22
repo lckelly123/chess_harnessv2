@@ -185,13 +185,9 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   };
 
   return (
-    <section className="positional-testing" aria-labelledby="positional-testing-title">
+    <section className="positional-testing" aria-label="Positional testing workspace">
       <header className="positional-heading">
-        <div>
-          <h1 id="positional-testing-title">Positional testing</h1>
-          <p>Open a saved board state, choose an agent harness, and ask it for exactly one move.</p>
-        </div>
-        <code>backend/positional_testing/positions</code>
+        <p>Explore a saved position. Choose a harness and see its next move.</p>
       </header>
 
       <div className="positional-workspace">
@@ -199,7 +195,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
           <header className="position-index__header">
             <div>
               <h2>Saved positions</h2>
-              <p>PGN files are read from the local test catalog.</p>
+              <p>Choose a position to test.</p>
             </div>
             <span aria-label={`${positions.length} saved positions`}>{positions.length}</span>
           </header>
@@ -244,12 +240,12 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
           )}
         </aside>
 
-        <section className="position-stage" aria-live="polite">
+        <section className="position-stage" aria-label="Position and test controls">
           {!selectedPosition || !boardPosition ? (
             <div className="position-stage__empty">
               <Crosshair size={28} strokeWidth={1.7} aria-hidden="true" />
               <h2>Select a saved position</h2>
-              <p>The board and harness choices will appear here.</p>
+              <p>Choose a saved position to inspect the board and run a single turn.</p>
             </div>
           ) : (
             <>
@@ -265,99 +261,121 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
                 <span>{titleCase(selectedPosition.sideToMove)} to move</span>
               </header>
 
-              <Chessboard position={boardPosition} flipped={false} />
-              {runResult ? (
-                <p className="position-stage__board-note">
-                  The proposed {runResult.move.san} path is marked; the saved board remains unchanged.
-                </p>
-              ) : null}
+              <div className="position-stage__content">
+                <div className="position-stage__board">
+                  <Chessboard position={boardPosition} flipped={false} />
+                  <dl className="position-stage__metadata">
+                    <div><dt>Source</dt><dd>{selectedPosition.sourceFile}</dd></div>
+                    <div><dt>Ply</dt><dd>{selectedPosition.moveCount}</dd></div>
+                  </dl>
+                  {runResult ? (
+                    <p className="position-stage__board-note">
+                      Proposed move: <strong>{runResult.move.san}</strong>. The highlighted squares mark its path on the saved position.
+                    </p>
+                  ) : null}
+                </div>
 
-              <fieldset className="agent-picker">
-                <legend>Choose a harness</legend>
-                <p>The backend sends this exact position to one harness for one move. Local model turns can take a few minutes.</p>
-                {harnessLoading ? (
-                  <div className="agent-picker__state" aria-live="polite">Loading harness choices…</div>
-                ) : harnessError ? (
-                  <div className="agent-picker__state agent-picker__state--error" role="alert">
-                    <span><strong>Harness choices unavailable.</strong> {harnessError}</span>
-                    <button type="button" onClick={() => void retryHarnesses()}>
-                      <RotateCcw size={14} aria-hidden="true" /> Retry
-                    </button>
-                  </div>
-                ) : missingHarnesses.length > 0 ? (
-                  <div className="agent-picker__state agent-picker__state--error" role="alert">
-                    <span>
-                      <strong>Expected harness missing.</strong>{" "}
-                      The backend did not return {missingHarnesses.map((harness) => harness.name).join(" or ")}.
-                    </span>
-                    <button type="button" onClick={() => void retryHarnesses()}>
-                      <RotateCcw size={14} aria-hidden="true" /> Reload harnesses
-                    </button>
-                  </div>
-                ) : (
-                  <div className="agent-choice-list">
-                    {availableHarnesses.map((harness) => {
-                      const selected = harness.id === selectedHarnessId;
-                      return (
-                        <label
-                          className={selected ? "agent-choice agent-choice--selected" : "agent-choice"}
-                          key={harness.id}
-                        >
-                          <input
-                            type="radio"
-                            name="positional-test-harness"
-                            value={harness.id}
-                            checked={selected}
-                            disabled={running}
-                            onChange={(event) => chooseHarness(event.target.value)}
-                          />
-                          <span>
-                            <strong>{harness.name}</strong>
-                            <small>{harness.summary}</small>
-                            <code>{harness.version}</code>
-                          </span>
-                          {selected ? <Check size={18} aria-hidden="true" /> : null}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </fieldset>
-
-              {selectedHarness ? (
-                <div className="positional-runbar">
-                  <div className="positional-runbar__copy">
-                    <Check size={18} aria-hidden="true" />
-                    <span>
-                      <strong>{selectedHarness.name} is ready</strong>
-                      <small>One turn only · no match record · saved PGN stays unchanged</small>
-                    </span>
-                  </div>
-                  <button
-                    className="positional-runbar__button"
-                    type="button"
-                    disabled={running}
-                    aria-busy={running}
-                    onClick={() => void runOnce()}
-                  >
-                    {running ? (
-                      <><LoaderCircle className="spin" size={16} aria-hidden="true" /> Running one turn…</>
+                <aside className="position-inspector" aria-label="Run a positional test">
+                  <fieldset className="agent-picker" disabled={running}>
+                    <legend>Choose a harness</legend>
+                    <p>Each run proposes one move from this position.</p>
+                    {harnessLoading ? (
+                      <div className="agent-picker__state" aria-live="polite">Loading harness choices…</div>
+                    ) : harnessError ? (
+                      <div className="agent-picker__state agent-picker__state--error" role="alert">
+                        <span><strong>Harness choices unavailable.</strong> {harnessError}</span>
+                        <button type="button" onClick={() => void retryHarnesses()}>
+                          <RotateCcw size={14} aria-hidden="true" /> Retry
+                        </button>
+                      </div>
+                    ) : missingHarnesses.length > 0 ? (
+                      <div className="agent-picker__state agent-picker__state--error" role="alert">
+                        <span>
+                          <strong>Expected harness missing.</strong>{" "}
+                          The catalog did not return {missingHarnesses.map((harness) => harness.name).join(" or ")}.
+                        </span>
+                        <button type="button" onClick={() => void retryHarnesses()}>
+                          <RotateCcw size={14} aria-hidden="true" /> Reload harnesses
+                        </button>
+                      </div>
                     ) : (
-                      <><Play size={15} fill="currentColor" aria-hidden="true" /> {runError ? "Try again" : runResult ? "Run again" : "Run once"}</>
+                      <div className="agent-choice-list">
+                        {availableHarnesses.map((harness) => {
+                          const selected = harness.id === selectedHarnessId;
+                          return (
+                            <label
+                              className={selected ? "agent-choice agent-choice--selected" : "agent-choice"}
+                              key={harness.id}
+                            >
+                              <input
+                                type="radio"
+                                name="positional-test-harness"
+                                value={harness.id}
+                                checked={selected}
+                                disabled={running}
+                                onChange={(event) => chooseHarness(event.target.value)}
+                              />
+                              <span className="agent-choice__copy">
+                                <strong>{harness.name}</strong>
+                                <small>{harness.summary}</small>
+                                <code>{harness.version}</code>
+                              </span>
+                              {selected ? <Check size={18} aria-hidden="true" /> : null}
+                            </label>
+                          );
+                        })}
+                      </div>
                     )}
-                  </button>
-                </div>
-              ) : null}
+                  </fieldset>
 
-              {runError ? (
-                <div className="positional-run-error" role="alert">
-                  <AlertTriangle size={18} aria-hidden="true" />
-                  <span>
-                    <strong>The agent did not return a move.</strong>
-                    <small>{runError} Check LM Studio, then try again.</small>
-                  </span>
-                </div>
-              ) : null}
+                  <div className="positional-runbar">
+                    <div className="positional-runbar__copy" role="status">
+                      {running ? (
+                        <LoaderCircle className="spin" size={18} aria-hidden="true" />
+                      ) : selectedHarness ? (
+                        <Check size={18} aria-hidden="true" />
+                      ) : (
+                        <Crosshair size={18} aria-hidden="true" />
+                      )}
+                      <span>
+                        <strong>
+                          {running
+                            ? "Running one turn"
+                            : runResult
+                              ? `Move ${runResult.move.san} proposed`
+                              : selectedHarness
+                                ? `${selectedHarness.name} selected`
+                                : "Select a harness to begin"}
+                        </strong>
+                        <small>{running ? "Waiting for the model. This can take a few minutes." : "Your saved position stays unchanged."}</small>
+                      </span>
+                    </div>
+                    <button
+                      className="positional-runbar__button"
+                      type="button"
+                      disabled={running || !selectedHarness || harnessLoading || !!harnessError || missingHarnesses.length > 0}
+                      aria-busy={running}
+                      onClick={() => void runOnce()}
+                    >
+                      {running ? (
+                        <><LoaderCircle className="spin" size={16} aria-hidden="true" /> Running one turn…</>
+                      ) : (
+                        <><Play size={15} fill="currentColor" aria-hidden="true" /> {runError ? "Try again" : runResult ? "Run again" : "Run once"}</>
+                      )}
+                    </button>
+                  </div>
+
+                  {runError ? (
+                    <div className="positional-run-error" role="alert">
+                      <AlertTriangle size={18} aria-hidden="true" />
+                      <span>
+                        <strong>The agent did not return a move.</strong>
+                        <small>{runError} Check the selected model connection, then try again.</small>
+                      </span>
+                    </div>
+                  ) : null}
+                </aside>
+              </div>
 
               {runResult ? (
                 <section className="positional-result" aria-labelledby="positional-result-title">

@@ -64,18 +64,19 @@ export function MatchDocket({
   return (
     <form className="match-docket" onSubmit={submit}>
       <div className="docket-title">
-        <span className="docket-number">NEW MATCH</span>
-        <p>Choose two versioned harnesses. The backend validates and records every move.</p>
+        <h2>Match setup</h2>
+        <p>Pair two harnesses and choose where to save the run.</p>
       </div>
       <label className="field-control">
         <span>White harness</span>
         <select value={whiteId} onChange={(event) => onWhiteChange(event.target.value)} disabled={busy}>
           {harnesses.map((harness) => (
             <option key={harness.id} value={harness.id}>
-              {harness.name} · {harness.version}
+              {harness.name}
             </option>
           ))}
         </select>
+        <small className="field-version">{harnesses.find((harness) => harness.id === whiteId)?.version}</small>
       </label>
       <span className="versus-mark" aria-hidden="true">vs</span>
       <label className="field-control">
@@ -83,10 +84,11 @@ export function MatchDocket({
         <select value={blackId} onChange={(event) => onBlackChange(event.target.value)} disabled={busy}>
           {harnesses.map((harness) => (
             <option key={harness.id} value={harness.id}>
-              {harness.name} · {harness.version}
+              {harness.name}
             </option>
           ))}
         </select>
+        <small className="field-version">{harnesses.find((harness) => harness.id === blackId)?.version}</small>
       </label>
       <div className="field-control folder-field">
         <span id="game-folder-label">Game folder</span>

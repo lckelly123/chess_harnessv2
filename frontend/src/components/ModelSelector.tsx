@@ -16,6 +16,7 @@ export function ModelSelector({ selection, disabled, onChange }: ModelSelectorPr
         <select
           value={selection.modelId}
           disabled={disabled}
+          aria-label="Requested model"
           aria-describedby="model-routing-status"
           onChange={(event) => onChange({
             modelId: event.target.value as ModelSelection["modelId"],
