@@ -6,6 +6,28 @@ afterEach(() => {
 });
 
 describe("matchApi", () => {
+  it("starts a full-set queue with its configuration and polls or stops by queue ID", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 })));
+    vi.stubGlobal("fetch", fetchMock);
+    const input = { split: "test" as const, datasetVersion: "positions-v1", harnessId: "agent-player-3-langgraph-v1", modelSelection: { modelId: "gpt-terra" as const, reasoningEffort: "medium" as const } };
+    await matchApi.createPositionQueue(input);
+    await matchApi.listPositionQueues();
+    await matchApi.getPositionQueue("queue/id");
+    await matchApi.stopPositionQueue("queue/id");
+    expect(fetchMock.mock.calls[0]).toEqual(["/api/positional-testing/queues", expect.objectContaining({ method: "POST", body: JSON.stringify(input) })]);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/positional-testing/queues");
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/positional-testing/queues/queue%2Fid");
+    expect(fetchMock.mock.calls[3]).toEqual(["/api/positional-testing/queues/queue%2Fid/stop", expect.objectContaining({ method: "POST" })]);
+  });
+
+  it("filters persistent runs by both IDs and loads a run's passes", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })));
+    vi.stubGlobal("fetch", fetchMock);
+    await matchApi.listModelRuns({ positionId: "position-id", runId: "run-id", offset: 30 });
+    await matchApi.getModelRun("run-id");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/positional-testing/runs?limit=30&offset=30&position_id=position-id&run_id=run-id");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/positional-testing/runs/run-id");
+  });
   it.each(["qwen", "gpt-terra"] as const)("includes the requested %s model and medium reasoning on new runs", async (modelId) => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
       new Response(JSON.stringify({ id: "request-only" }), {
@@ -22,7 +44,7 @@ describe("matchApi", () => {
       modelSelection,
     };
     const positionInput = {
-      positionId: "before_queen_blunder",
+      positionId: "5448280b-9d09-5211-97d3-ff1376d90797",
       harnessId: "agent-player-2-langgraph-v1",
       modelSelection,
     };
@@ -91,8 +113,8 @@ describe("matchApi", () => {
     );
   });
 
-  it("loads the saved positional-testing catalog", async () => {
-    const responseBody = { items: [{ id: "before_queen_blunder" }] };
+  it("loads the PostgreSQL position library", async () => {
+    const responseBody = { items: [{ id: "5448280b-9d09-5211-97d3-ff1376d90797" }] };
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(responseBody), {
         status: 200,
@@ -124,7 +146,7 @@ describe("matchApi", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await matchApi.runPositionalTest({
-      positionId: "before_queen_blunder",
+      positionId: "5448280b-9d09-5211-97d3-ff1376d90797",
       harnessId: "agent-player-1-langgraph-v1",
     });
 
@@ -133,7 +155,7 @@ describe("matchApi", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          positionId: "before_queen_blunder",
+          positionId: "5448280b-9d09-5211-97d3-ff1376d90797",
           harnessId: "agent-player-1-langgraph-v1",
         }),
       }),

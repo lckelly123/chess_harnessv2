@@ -1,6 +1,8 @@
 """API models owned by the positional testing boundary."""
 
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -28,9 +30,16 @@ class SavedPositionSnapshot(PositionalTestingModel):
 class SavedPosition(PositionalTestingModel):
     id: str
     name: str
-    source_file: str
-    white: str | None = None
-    black: str | None = None
+    dataset_version: str
+    split: Literal["train", "test"]
+    phase: Literal["opening", "middlegame", "endgame"]
+    position_type: Literal["quiet", "tactical"]
+    source: Literal["lichess_game", "lichess_puzzle"]
+    source_game_id: str
+    source_url: str
+    opening: str | None = None
+    themes: list[str] = Field(default_factory=list)
+    puzzle_rating: int | None = None
     side_to_move: Literal["white", "black"]
     move_count: int
     position: SavedPositionSnapshot
@@ -80,3 +89,101 @@ class SavedPositionRun(PositionalTestingModel):
     justification: str
     defense_report: str | None = None
     attack_report: str | None = None
+
+
+class ModelRunSummary(PositionalTestingModel):
+    id: UUID
+    position_id: UUID
+    model: str
+    harness: str
+    config: dict[str, Any]
+    status: Literal["running", "completed", "failed"]
+    final_move_uci: str | None = None
+    cp_loss: int | None = None
+    classification: str | None = None
+    expected_points_loss: float | None = None
+    better_moves: list[dict[str, Any]] | None = None
+    evaluation: dict[str, Any] | None = None
+    error: str | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+
+
+class ModelRunPass(PositionalTestingModel):
+    run_id: UUID
+    pass_number: int
+    phase: str
+    tool_calls: list[dict[str, Any]]
+    working_notes: str | None = None
+    status: Literal["running", "completed", "failed"]
+    error: str | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+
+
+class ModelRunDetail(ModelRunSummary):
+    passes: list[ModelRunPass]
+
+
+class ModelRunList(PositionalTestingModel):
+    items: list[ModelRunSummary]
+    total: int
+
+
+class CreatePositionQueueRequest(PositionalTestingModel):
+    dataset_version: str = Field(min_length=1, max_length=240)
+    split: Literal["train", "test"]
+    harness_id: str = Field(min_length=1, max_length=120)
+    model_selection: ModelSelection | None = None
+
+    @field_validator("dataset_version", "harness_id")
+    @classmethod
+    def normalize_identifier(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Identifier cannot be blank.")
+        return value
+
+
+class PositionQueueSummary(PositionalTestingModel):
+    id: UUID
+    dataset_version: str
+    split: Literal["train", "test"]
+    harness_id: str
+    harness_name: str
+    harness_version: str
+    model_selection: ModelSelection
+    status: Literal["queued", "running", "stopping", "completed", "stopped"]
+    total: int
+    completed: int
+    failed: int
+    pending: int
+    running: int
+    skipped: int
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class PositionQueueItem(PositionalTestingModel):
+    queue_id: UUID
+    ordinal: int
+    position_id: UUID
+    run_id: UUID | None = None
+    status: Literal["queued", "running", "completed", "failed", "skipped"]
+    phase: str
+    position_type: str
+    final_move_uci: str | None = None
+    classification: str | None = None
+    failure_stage: str | None = None
+    error: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
+class PositionQueueDetail(PositionQueueSummary):
+    items: list[PositionQueueItem]
+
+
+class PositionQueueList(PositionalTestingModel):
+    items: list[PositionQueueSummary]

@@ -5,6 +5,7 @@ from collections.abc import Callable
 from harness.contracts import HarnessError, TurnCancelled
 from harness.model import Model, visible_output
 from harness.protocol import ToolProtocolError
+from harness.recording import complete_pass, record_node, recorded_tool
 
 from .config import AgentConfig
 from .prompt_builder import build_prompt
@@ -64,6 +65,7 @@ class SynthesisNodes:
             ],
         }
 
+    @record_node
     async def _model_pass(self, phase: Phase, state: TurnState):
         self._check_cancelled()
         if state["phase"] != phase:
@@ -72,7 +74,9 @@ class SynthesisNodes:
             raise HarnessError(f"{phase} exceeded its model-call limit.")
         forced = state["forced_retry"]
         prompt = build_prompt(state)
-        response = await self.model.complete(
+        response = await complete_pass(
+            self.model,
+            state,
             model=self.config.model,
             instructions=prompt.instructions,
             dynamic_input=prompt.dynamic_input,
@@ -148,6 +152,7 @@ class SynthesisNodes:
             return self._execute(current)
         return {**current, "next_step": f"{phase}_tools"}
 
+    @record_node
     def _execute(self, state: TurnState):
         self._check_cancelled()
         calls = state["pending_tools"]
@@ -174,7 +179,8 @@ class SynthesisNodes:
                     "running_thoughts": state["running_thoughts"],
                     "arguments": dict(call["arguments"]),
                 }
-                result = execute_tool(
+                result = recorded_tool(
+                    execute_tool,
                     phase=state["phase"],
                     name=call["tool"],
                     arguments=call["arguments"],

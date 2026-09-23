@@ -30,6 +30,10 @@ Then open:
 
 Stop the stack with `docker compose down`.
 
+The PostgreSQL position library holds 200 training and 200 test exercises in a
+persistent Docker volume. See [position library setup, sources, and curation](docs/position-library.md)
+for import commands, schema details, and the exact phase/quiet/tactical mix.
+
 ### Model selection
 
 The web UI's model selector applies to new matches (both players) and one-turn
@@ -64,7 +68,7 @@ backend/
   app/                 FastAPI routes plus SQLite-backed match orchestration
   chess_core/          Deterministic position, scratchboard, inspection, and SEE logic
   harness/             Independent agent_player_1 and baseline graphs; shared transport/protocol
-  positional_testing/  Saved PGNs plus the one-turn API and CLI runner
+  positional_testing/  PostgreSQL position library, curation, and one-turn runner
   tests/               API, chess-core, graph, prompt-parity, and tracing tests
   Dockerfile           Python development and production stages
 frontend/
@@ -73,11 +77,11 @@ frontend/
   Dockerfile           Vite development and Nginx production stages
 docs/
   frontend-backend-contract.md
-compose.yaml            Local two-service development stack
+compose.yaml            Local frontend, backend, and PostgreSQL development stack
 PRODUCT.md              Product truth and scope
 ```
 
-The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, `backend/app`, `backend/chess_core`, `backend/harness` (including its prompts), and `backend/positional_testing` (including saved PGNs). Test tooling stays in the test stage. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
+The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, `backend/app`, `backend/chess_core`, `backend/harness` (including its prompts), and `backend/positional_testing` (including the frozen position dataset). Test tooling stays in the test stage. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
 
 ## Agent Player 1
 
@@ -120,23 +124,51 @@ either production graph node by node in Studio, follow the
 
 ## Positional testing
 
-Open **Positional testing** in the web UI, select a PGN from
-`backend/positional_testing/positions`, choose Baseline or Agent Player 1, and
-click **Run once**. The backend asks that harness for one legal move and returns
+Open **Positional testing** in the web UI to browse the PostgreSQL library.
+Filter by training/test set, phase, quiet/tactical type, and side to move. **More
+filters** includes dataset version, source, puzzle theme, and puzzle-rating band;
+search matches opening names, themes, and IDs. Rows and the selected board show
+the position's tags, source, and rating when available.
+
+Select a position, choose Baseline or Agent Player 1, 2, or 3, and click **Run once**.
+The backend loads and validates that row's PGN history, asks the harness for one legal move, and returns
 its proposed move, resolved model, justification, and any available phase reports
-without creating a match or changing the saved PGN.
+without creating a match or changing the library. Ratings, themes, classifications,
+and engine reference answers are not included in the model's turn request.
+See [position library setup](docs/position-library.md) if the library is empty.
+
+To run a complete split, use **Run a full set** above the position browser. Select
+Training or Test, the dataset and harness, then **Run full queue**. The selected
+global model is captured when the queue starts. The queue runs every position in
+that split, regardless of the library's filters, with one model turn and its
+Stockfish evaluation at a time. Progress survives closing the tab. Failed
+positions keep an error and trace link, and execution continues with the next.
+Use the failed count to inspect failures, or **Stop after current** to finish the
+current position and skip the rest. Recent queues remain available for review.
+See [queue storage and recovery](docs/position-library.md#full-set-queues).
+
+Each attempt now persists in PostgreSQL. **View run history** opens the history
+section: filter by Position ID and Run ID, select an attempt, and inspect the
+chosen move above its scrollable model passes. Each pass groups its working notes
+and tool calls/results. Failed attempts retain their partial traces; running
+records update automatically. After the model submits its move, Stockfish 18
+automatically grades it and stores its expected-points loss, classification, and
+every strictly better legal move in PostgreSQL. The completed grade appears in
+run history. Older runs are not backfilled. See the [grading policy and stored
+training targets](docs/position-library.md#automatic-run-evaluation).
 
 The same path has a clean CLI entrypoint. With the Docker stack running:
 
 ```powershell
-docker compose exec backend python -m positional_testing --position before_queen_blunder --agent agent_player_1
+$positionId = (Invoke-RestMethod http://localhost:8000/api/positional-testing/positions).items[0].id
+docker compose exec backend python -m positional_testing --position $positionId --agent agent_player_1
 ```
 
 Or run it from the backend virtual environment:
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m positional_testing --position before_queen_blunder --agent agent_player_1
+.\.venv\Scripts\python.exe -m positional_testing --position $positionId --agent agent_player_1
 ```
 
 Use `--agent baseline` for the baseline harness. Both entrypoints use

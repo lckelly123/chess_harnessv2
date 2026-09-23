@@ -6,6 +6,7 @@ from harness.contracts import HarnessError, TurnCancelled
 from harness.model import Model, visible_output
 from harness.prompting import forced_input
 from harness.protocol import ToolProtocolError, ToolRejected, parse_tool_call
+from harness.recording import complete_pass, record_node, recorded_tool
 
 from .config import BaselineConfig
 from .prompts import build_input, load_instructions
@@ -27,6 +28,7 @@ class BaselineNodes:
         if self.cancellation_check and self.cancellation_check():
             raise TurnCancelled("Turn cancelled; no move submitted.")
 
+    @record_node
     async def decide(self, state: BaselineState):
         self._check_cancelled()
         if state["model_calls"] >= self.config.max_model_calls:
@@ -40,7 +42,9 @@ class BaselineNodes:
                 token_limit=self.config.max_output_tokens,
                 trigger=state["retry_trigger"],
             )
-        response = await self.model.complete(
+        response = await complete_pass(
+            self.model,
+            state,
             model=self.config.model,
             instructions=load_instructions(),
             dynamic_input=dynamic,
@@ -112,6 +116,7 @@ class BaselineNodes:
             }
         return {**current, "pending_tool": call, "next_step": "validate_submission"}
 
+    @record_node
     def validate_submission(self, state: BaselineState):
         self._check_cancelled()
         call = state["pending_tool"]
@@ -126,7 +131,9 @@ class BaselineNodes:
             "arguments": {"move": call["arguments"]["move"]},
         }
         try:
-            decision = submit_move(state["canonical_fen"], call["arguments"])
+            decision = recorded_tool(
+                submit_move, state["canonical_fen"], call["arguments"]
+            )
         except ToolRejected as exc:
             rejected = state["rejected_calls"] + 1
             if rejected >= self.config.max_failed_tool_calls:

@@ -1,0 +1,3 @@
+# Frozen dataset checksums must survive Windows/Linux checkouts unchanged.
+backend/positional_testing/datasets/seed/**/*.jsonl text eol=lf
+backend/positional_testing/datasets/seed/**/*.json text eol=lf

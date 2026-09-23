@@ -463,16 +463,16 @@ def test_catalog_constructs_native_player_for_matches():
     assert white.config.provider == "openai"
 
 
-def test_positional_api_runs_registered_native_player(database_path):
+def test_positional_api_runs_registered_native_player(database_path, library_rows):
     cloud = ScriptedModel(
         [
-            native_response("candidate", action("scratch_play_move", move="Qd6")),
-            native_response("reply", action("scratch_play_move", move="O-O")),
+            native_response("candidate", action("scratch_play_move", move="e5")),
+            native_response("reply", action("scratch_play_move", move="Nd5")),
             native_response(
                 "submit",
                 action(
                     "submit_move",
-                    move="Qd6",
+                    move="e5",
                     tested_branch="B1",
                     decision_summary="Scripted registration test after testing the legal reply.",
                 ),
@@ -495,7 +495,7 @@ def test_positional_api_runs_registered_native_player(database_path):
             response = client.post(
                 "/api/positional-testing/runs",
                 json={
-                    "positionId": "before_queen_blunder",
+                    "positionId": library_rows[0]["id"],
                     "harnessId": AGENT_PLAYER_3_ID,
                     "modelSelection": {
                         "modelId": "gpt-terra",
@@ -507,7 +507,7 @@ def test_positional_api_runs_registered_native_player(database_path):
             assert response.json()["harnessId"] == AGENT_PLAYER_3_ID
             assert response.json()["harnessName"] == "Agent Player 3"
             assert response.json()["model"] == GPT_TERRA_MODEL
-            assert response.json()["move"]["san"] == "Qd6"
+            assert response.json()["move"]["san"] == "e5"
             assert len(cloud.calls) == 3
             assert all(
                 call["native_turn"].function_name == "agent_step"

@@ -1,9 +1,7 @@
 import {
   AlertTriangle,
   Check,
-  ChevronRight,
   Crosshair,
-  FileText,
   LoaderCircle,
   Play,
   RotateCcw,
@@ -18,6 +16,10 @@ import type {
   PositionalTestRun,
 } from "../api/contracts";
 import { Chessboard } from "./Chessboard";
+import { PositionLibrary, PositionTags } from "./PositionLibrary";
+import { tagLabel } from "./positionFilters";
+import { RunHistory } from "./RunHistory";
+import { PositionQueue } from "./PositionQueue";
 
 const POSITIONAL_HARNESSES = [
   { id: "baseline-direct-submit-langgraph-v1", name: "Baseline" },
@@ -45,8 +47,11 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   const [error, setError] = useState<string | null>(null);
   const [harnessLoading, setHarnessLoading] = useState(true);
   const [harnessError, setHarnessError] = useState<string | null>(null);
+  const [historyRevision, setHistoryRevision] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<PositionalTestRun | null>(null);
+  const [queueActive, setQueueActive] = useState(false);
+  const [inspectedRunId, setInspectedRunId] = useState<string | undefined>();
 
   useEffect(() => {
     let cancelled = false;
@@ -54,11 +59,11 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
       if (cancelled) return;
       setPositions(response.items);
       setSelectedPositionId((current) =>
-        response.items.some((position) => position.id === current) ? current : "",
+        response.items.some((position) => position.id === current) ? current : response.items[0]?.id ?? "",
       );
     }).catch((caught: unknown) => {
       if (!cancelled) {
-        setError(caught instanceof Error ? caught.message : "Saved positions could not be loaded.");
+        setError(caught instanceof Error ? caught.message : "The position library could not be loaded.");
       }
     }).finally(() => {
       if (!cancelled) setLoading(false);
@@ -82,8 +87,8 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   }, []);
 
   const selectedPosition = useMemo(
-    () => positions.find((position) => position.id === selectedPositionId) ?? null,
-    [positions, selectedPositionId],
+    () => loading || error ? null : positions.find((position) => position.id === selectedPositionId) ?? null,
+    [positions, selectedPositionId, loading, error],
   );
 
   const availableHarnesses = useMemo(() => {
@@ -115,6 +120,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   }, [runResult, selectedPosition]);
 
   const clearRun = () => {
+    setInspectedRunId(undefined);
     setRunError(null);
     setRunResult(null);
   };
@@ -131,7 +137,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   };
 
   const runOnce = async () => {
-    if (!selectedPosition || !selectedHarness || running) return;
+    if (!selectedPosition || !selectedHarness || running || queueActive) return;
     onRunningChange(true);
     setRunError(null);
     setRunResult(null);
@@ -145,6 +151,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
     } catch (caught) {
       setRunError(caught instanceof Error ? caught.message : "The positional test could not be completed.");
     } finally {
+      setHistoryRevision((value) => value + 1);
       onRunningChange(false);
     }
   };
@@ -160,8 +167,10 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
         setSelectedHarnessId("");
         clearRun();
       }
+      return response.items;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Saved positions could not be loaded.");
+      setError(caught instanceof Error ? caught.message : "The position library could not be loaded.");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -187,76 +196,38 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   return (
     <section className="positional-testing" aria-label="Positional testing workspace">
       <header className="positional-heading">
-        <p>Explore a saved position. Choose a harness and see its next move.</p>
+        <p>Run a training or test set, or inspect one position and its model traces.</p>
+        <a href="#positional-run-history">View run history</a>
       </header>
 
+      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} singleRunning={running} onActiveChange={setQueueActive} onInspect={(positionId, runId) => {
+        choosePosition(positionId);
+        setInspectedRunId(runId ?? undefined);
+        setHistoryRevision((value) => value + 1);
+        requestAnimationFrame(() => {
+          const target = document.querySelector(runId ? "#positional-run-history" : ".position-stage");
+          if (target instanceof HTMLElement) target.focus({ preventScroll: true });
+          target?.scrollIntoView({ block: "start" });
+        });
+      }} />
+
       <div className="positional-workspace">
-        <aside className="position-index" aria-label="Saved positional tests">
-          <header className="position-index__header">
-            <div>
-              <h2>Saved positions</h2>
-              <p>Choose a position to test.</p>
-            </div>
-            <span aria-label={`${positions.length} saved positions`}>{positions.length}</span>
-          </header>
+        <PositionLibrary positions={positions} selectedId={selectedPositionId} loading={loading} error={error} running={running} onSelect={choosePosition} onRetry={retryPositions} />
 
-          {loading ? (
-            <div className="position-index__state" aria-live="polite">Reading saved positions…</div>
-          ) : error ? (
-            <div className="position-index__state position-index__state--error" role="alert">
-              <p>{error}</p>
-              <button type="button" onClick={() => void retryPositions()}>
-                <RotateCcw size={14} aria-hidden="true" /> Retry
-              </button>
-            </div>
-          ) : positions.length === 0 ? (
-            <div className="position-index__state">
-              No saved PGNs found. Add one to <code>positional_testing/positions</code>.
-            </div>
-          ) : (
-            <div className="position-list">
-              {positions.map((position) => {
-                const selected = position.id === selectedPositionId;
-                return (
-                  <button
-                    className={selected ? "position-row position-row--selected" : "position-row"}
-                    type="button"
-                    key={position.id}
-                    aria-pressed={selected}
-                    disabled={running}
-                    onClick={() => choosePosition(position.id)}
-                  >
-                    <FileText size={17} aria-hidden="true" />
-                    <span className="position-row__copy">
-                      <strong>{position.name}</strong>
-                      <span>{position.sourceFile}</span>
-                      <small>{titleCase(position.sideToMove)} to move · ply {position.moveCount}</small>
-                    </span>
-                    <ChevronRight size={16} aria-hidden="true" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </aside>
-
-        <section className="position-stage" aria-label="Position and test controls">
+        <section className="position-stage" aria-label="Position and test controls" tabIndex={-1}>
           {!selectedPosition || !boardPosition ? (
             <div className="position-stage__empty">
               <Crosshair size={28} strokeWidth={1.7} aria-hidden="true" />
-              <h2>Select a saved position</h2>
-              <p>Choose a saved position to inspect the board and run a single turn.</p>
+              <h2>{loading ? "Loading positions" : error ? "Position library unavailable" : "Select a position"}</h2>
+              <p>{error ? "Retry the library to load a position." : "Choose a matching position to inspect the board and run a single turn."}</p>
             </div>
           ) : (
             <>
               <header className="position-stage__header">
                 <div>
                   <h2>{selectedPosition.name}</h2>
-                  <p>
-                    {selectedPosition.white && selectedPosition.black
-                      ? `${selectedPosition.white} vs ${selectedPosition.black}`
-                      : selectedPosition.sourceFile}
-                  </p>
+                  <p>{selectedPosition.opening ?? tagLabel(selectedPosition.source)} · {selectedPosition.sourceGameId}</p>
+                  <PositionTags position={selectedPosition} />
                 </div>
                 <span>{titleCase(selectedPosition.sideToMove)} to move</span>
               </header>
@@ -265,9 +236,15 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
                 <div className="position-stage__board">
                   <Chessboard position={boardPosition} flipped={false} />
                   <dl className="position-stage__metadata">
-                    <div><dt>Source</dt><dd>{selectedPosition.sourceFile}</dd></div>
-                    <div><dt>Ply</dt><dd>{selectedPosition.moveCount}</dd></div>
+                    <div><dt>Source</dt><dd><a href={selectedPosition.sourceUrl} target="_blank" rel="noreferrer">{tagLabel(selectedPosition.source)}</a></dd></div>
+                    <div><dt>Dataset</dt><dd>{selectedPosition.datasetVersion}</dd></div>
+                    <div><dt>Last move</dt><dd>{selectedPosition.position.san} · ply {selectedPosition.moveCount}</dd></div>
                   </dl>
+                  <div className="position-stage__classifiers">
+                    <p>{selectedPosition.puzzleRating !== null ? `Puzzle rating ${selectedPosition.puzzleRating}` : "Quiet position · difficulty unrated"}</p>
+                    {selectedPosition.themes.length > 0 ? <div className="position-tags" aria-label="Puzzle themes">{selectedPosition.themes.map((theme) => <span className="position-tag" key={theme}>{tagLabel(theme)}</span>)}</div> : null}
+                    <details className="position-record"><summary>Position details</summary><dl><div><dt>Position ID</dt><dd>{selectedPosition.id}</dd></div><div><dt>FEN</dt><dd>{selectedPosition.position.fen}</dd></div></dl></details>
+                  </div>
                   {runResult ? (
                     <p className="position-stage__board-note">
                       Proposed move: <strong>{runResult.move.san}</strong>. The highlighted squares mark its path on the saved position.
@@ -347,13 +324,13 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
                                 ? `${selectedHarness.name} selected`
                                 : "Select a harness to begin"}
                         </strong>
-                        <small>{running ? "Waiting for the model. This can take a few minutes." : "Your saved position stays unchanged."}</small>
+                        <small>{running ? "Waiting for the model. This can take a few minutes." : queueActive ? "A full queue is active. Single runs are available when it finishes." : "Your saved position stays unchanged."}</small>
                       </span>
                     </div>
                     <button
                       className="positional-runbar__button"
                       type="button"
-                      disabled={running || !selectedHarness || harnessLoading || !!harnessError || missingHarnesses.length > 0}
+                      disabled={running || queueActive || !selectedHarness || harnessLoading || !!harnessError || missingHarnesses.length > 0}
                       aria-busy={running}
                       onClick={() => void runOnce()}
                     >
@@ -376,55 +353,11 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
                   ) : null}
                 </aside>
               </div>
-
-              {runResult ? (
-                <section className="positional-result" aria-labelledby="positional-result-title">
-                  <header className="positional-result__header">
-                    <div>
-                      <h3 id="positional-result-title">Proposed move</h3>
-                      <p>{runResult.harnessName} completed one turn from ply {runResult.ply}.</p>
-                    </div>
-                    <span><Check size={13} aria-hidden="true" /> Complete</span>
-                  </header>
-
-                  <div className="positional-result__move">
-                    <strong>{runResult.move.san}</strong>
-                    <code>{runResult.move.uci}</code>
-                    <dl>
-                      <div><dt>Side</dt><dd>{titleCase(runResult.side)}</dd></div>
-                      <div><dt>Harness</dt><dd>{runResult.harnessName}</dd></div>
-                      <div><dt>Model</dt><dd>{runResult.model}</dd></div>
-                      <div><dt>Run</dt><dd>{runResult.runId}</dd></div>
-                    </dl>
-                  </div>
-
-                  <div className="positional-result__text">
-                    <h4>Justification</h4>
-                    <p>{runResult.justification}</p>
-                  </div>
-
-                  {runResult.defenseReport || runResult.attackReport ? (
-                    <div className="positional-result__reports">
-                      {runResult.defenseReport ? (
-                        <div>
-                          <h4>Defense report</h4>
-                          <p>{runResult.defenseReport}</p>
-                        </div>
-                      ) : null}
-                      {runResult.attackReport ? (
-                        <div>
-                          <h4>Attack report</h4>
-                          <p>{runResult.attackReport}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </section>
-              ) : null}
             </>
           )}
         </section>
       </div>
+      <RunHistory key={`${selectedPositionId}:${inspectedRunId ?? ""}`} positionId={selectedPositionId} preferredRunId={inspectedRunId ?? runResult?.runId} revision={historyRevision} running={running || queueActive} />
     </section>
   );
 }

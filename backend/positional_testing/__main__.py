@@ -1,4 +1,4 @@
-"""Run one registered harness against one saved positional-test PGN."""
+"""Run one registered harness against a PostgreSQL library position."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from langchain_core.tracers.langchain import wait_for_all_tracers
 from app.matches.catalog import (
     AGENT_PLAYER_1_ID,
     AGENT_PLAYER_2_ID,
+    AGENT_PLAYER_3_ID,
     BASELINE_ID,
     HarnessCatalog,
 )
@@ -21,9 +22,11 @@ AGENT_ALIASES = {
     "baseline": BASELINE_ID,
     "agent_player_1": AGENT_PLAYER_1_ID,
     "agent_player_2": AGENT_PLAYER_2_ID,
+    "agent_player_3": AGENT_PLAYER_3_ID,
     BASELINE_ID: BASELINE_ID,
     AGENT_PLAYER_1_ID: AGENT_PLAYER_1_ID,
     AGENT_PLAYER_2_ID: AGENT_PLAYER_2_ID,
+    AGENT_PLAYER_3_ID: AGENT_PLAYER_3_ID,
 }
 
 
@@ -31,7 +34,7 @@ def _agent_id(value: str) -> str:
     try:
         return AGENT_ALIASES[value.strip()]
     except KeyError as exc:
-        choices = "baseline, agent_player_1, or agent_player_2"
+        choices = "baseline, agent_player_1, agent_player_2, or agent_player_3"
         raise argparse.ArgumentTypeError(f"agent must be {choices}") from exc
 
 
@@ -52,13 +55,13 @@ def main() -> None:
     parser.add_argument(
         "--position",
         required=True,
-        help="Saved position ID, for example before_queen_blunder.",
+        help="Position UUID from the PostgreSQL library or positional-testing API.",
     )
     parser.add_argument(
         "--agent",
         required=True,
         type=_agent_id,
-        metavar="{baseline,agent_player_1,agent_player_2}",
+        metavar="{baseline,agent_player_1,agent_player_2,agent_player_3}",
         help="Harness to invoke once.",
     )
     args = parser.parse_args()

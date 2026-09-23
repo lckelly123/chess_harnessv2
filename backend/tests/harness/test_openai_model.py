@@ -190,14 +190,16 @@ def test_gpt_runs_existing_graph_with_notes_batches_and_hidden_reasoning_retry(
     assert "test-openai-secret" not in str(trace_client.mock_calls)
 
 
-def test_gpt_positional_api_uses_real_graph_and_reports_resolved_model(database_path):
+def test_gpt_positional_api_uses_real_graph_and_reports_resolved_model(
+    database_path, library_rows
+):
     model, requests = mock_openai(
         [
-            thoughtful_call("scratch_play_move", move="Qxe3+"),
-            thoughtful_call("scratch_play_move", move="fxe3"),
+            thoughtful_call("scratch_play_move", move="e5"),
+            thoughtful_call("scratch_play_move", move="Nd5"),
             thoughtful_call(
                 "submit_move",
-                move="Qxe3+",
+                move="e5",
                 tested_branch="B1",
                 decision_summary="Scripted transport test, not a move recommendation.",
             ),
@@ -213,7 +215,7 @@ def test_gpt_positional_api_uses_real_graph_and_reports_resolved_model(database_
             response = client.post(
                 "/api/positional-testing/runs",
                 json={
-                    "positionId": "before_queen_blunder",
+                    "positionId": library_rows[0]["id"],
                     "harnessId": AGENT_PLAYER_2_ID,
                     "modelSelection": {
                         "modelId": "gpt-terra",
@@ -223,7 +225,7 @@ def test_gpt_positional_api_uses_real_graph_and_reports_resolved_model(database_
             )
             assert response.status_code == 200, response.text
             assert response.json()["model"] == GPT_TERRA_MODEL
-            assert response.json()["move"]["san"] == "Qxe3+"
+            assert response.json()["move"]["san"] == "e5"
             assert len(requests) == 3
             assert repository.list_matches().total == 0
     finally:
@@ -242,7 +244,7 @@ def test_gpt_positional_api_uses_real_graph_and_reports_resolved_model(database_
     ],
 )
 def test_provider_failures_return_safe_actionable_api_errors(
-    database_path, status, message
+    database_path, status, message, library_rows
 ):
     model, requests = mock_openai(
         [
@@ -264,7 +266,7 @@ def test_provider_failures_return_safe_actionable_api_errors(
             response = client.post(
                 "/api/positional-testing/runs",
                 json={
-                    "positionId": "before_queen_blunder",
+                    "positionId": library_rows[0]["id"],
                     "harnessId": BASELINE_ID,
                     "modelSelection": {"modelId": "gpt-terra"},
                 },

@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from harness.model import LMStudioModel, OpenAIModel
+from positional_testing.queue import PositionQueueManager
 from positional_testing.routes import router as positional_testing_router
 from positional_testing.runner import PositionalTestRunner
 
@@ -46,9 +47,15 @@ def create_app(
         manager = MatchManager(active_repository, active_catalog, configured_settings)
         app.state.match_manager = manager
         app.state.positional_test_runner = PositionalTestRunner(active_catalog)
+        queue_manager = PositionQueueManager(
+            app.state.positional_test_runner, active_catalog
+        )
+        app.state.position_queue = queue_manager
+        queue_manager.start()
         try:
             yield
         finally:
+            await queue_manager.close()
             await manager.close()
             if model_client is not None:
                 await model_client.aclose()

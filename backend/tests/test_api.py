@@ -20,6 +20,11 @@ from chess_core import normalize_move
 from harness.contracts import MoveDecision
 
 
+@pytest.fixture(autouse=True)
+def position_library(library_rows):
+    return library_rows
+
+
 class SlowPlayer:
     async def choose_move(self, request):
         await asyncio.sleep(3600)
@@ -32,10 +37,10 @@ class OneShotPlayer:
     async def choose_move(self, request):
         self.catalog.one_shot_requests.append(request)
         return MoveDecision(
-            move=normalize_move(request.fen, "Qxe3+"),
-            justification="Wins the bishop with check.",
+            move=normalize_move(request.fen, "e5"),
+            justification="Advance the center pawn.",
             defense_report="No urgent defense.",
-            attack_report="Capture e3 with check.",
+            attack_report="The pawn attacks the knight.",
         )
 
 
@@ -96,28 +101,31 @@ def test_real_api_contract_and_stop(database_path) -> None:
 
             positions = client.get("/api/positional-testing/positions")
             assert positions.status_code == 200
-            assert positions.json()["items"][0]["id"] == "before_queen_blunder"
-            assert positions.json()["items"][0]["sideToMove"] == "black"
-            assert positions.json()["items"][0]["position"]["san"] == "Be3"
+            assert (
+                positions.json()["items"][0]["id"]
+                == "5448280b-9d09-5211-97d3-ff1376d90797"
+            )
+            assert positions.json()["items"][0]["sideToMove"] == "white"
+            assert positions.json()["items"][0]["position"]["san"] == "Bb4"
+            assert positions.json()["items"][0]["split"] == "train"
+            assert positions.json()["items"][0]["phase"] == "opening"
 
             run = client.post(
                 "/api/positional-testing/runs",
                 json={
-                    "positionId": "before_queen_blunder",
+                    "positionId": "5448280b-9d09-5211-97d3-ff1376d90797",
                     "harnessId": AGENT_PLAYER_1_ID,
                 },
             )
             assert run.status_code == 200
-            assert run.json()["positionId"] == "before_queen_blunder"
+            assert run.json()["positionId"] == "5448280b-9d09-5211-97d3-ff1376d90797"
             assert run.json()["harnessName"] == "Agent Player 1"
             assert run.json()["model"] == "scripted-model"
-            assert run.json()["move"]["san"] == "Qxe3+"
-            assert run.json()["attackReport"] == "Capture e3 with check."
+            assert run.json()["move"]["san"] == "e5"
+            assert run.json()["attackReport"] == "The pawn attacks the knight."
             assert len(catalog.one_shot_requests) == 1
-            assert catalog.one_shot_requests[0].ply == 23
-            assert '[Event "Agent Player 1 Queen Blunder Test"]' in (
-                catalog.one_shot_requests[0].pgn
-            )
+            assert catalog.one_shot_requests[0].ply == 10
+            assert '[Result "*"]' in (catalog.one_shot_requests[0].pgn)
 
             folder_response = client.post(
                 "/api/folders", json={"name": "Baseline comparisons"}
@@ -203,7 +211,7 @@ def test_rejects_unknown_harness(database_path) -> None:
             positional_harness = client.post(
                 "/api/positional-testing/runs",
                 json={
-                    "positionId": "before_queen_blunder",
+                    "positionId": "5448280b-9d09-5211-97d3-ff1376d90797",
                     "harnessId": "missing",
                 },
             )
@@ -242,7 +250,7 @@ def test_both_endpoints_forward_model_selection(database_path, model_id):
             run = client.post(
                 "/api/positional-testing/runs",
                 json={
-                    "positionId": "before_queen_blunder",
+                    "positionId": "5448280b-9d09-5211-97d3-ff1376d90797",
                     "harnessId": AGENT_PLAYER_2_ID,
                     "modelSelection": selection,
                 },
@@ -282,7 +290,7 @@ def test_invalid_model_selection_is_rejected_before_run(database_path, selection
                 (
                     "/api/positional-testing/runs",
                     {
-                        "positionId": "before_queen_blunder",
+                        "positionId": "5448280b-9d09-5211-97d3-ff1376d90797",
                         "harnessId": AGENT_PLAYER_2_ID,
                     },
                 ),
@@ -319,7 +327,7 @@ def test_missing_openai_key_returns_actionable_error_without_local_fallback(
                 (
                     "/api/positional-testing/runs",
                     {
-                        "positionId": "before_queen_blunder",
+                        "positionId": "5448280b-9d09-5211-97d3-ff1376d90797",
                         "harnessId": AGENT_PLAYER_2_ID,
                     },
                 ),

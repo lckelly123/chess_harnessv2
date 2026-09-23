@@ -1,4 +1,22 @@
 services:
+  positions_db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSITIONS_DB_NAME:-chess_positions}
+      POSTGRES_USER: ${POSITIONS_DB_USER:-chess}
+      POSTGRES_PASSWORD: ${POSITIONS_DB_PASSWORD:-chess_local}
+    ports:
+      - "127.0.0.1:${POSITIONS_DB_PORT:-5433}:5432"
+    volumes:
+      - positions_data:/var/lib/postgresql/data
+      - ./backend/positional_testing/datasets/schema.sql:/docker-entrypoint-initdb.d/001-positions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   backend:
     build:
       context: ./backend
@@ -21,6 +39,15 @@ services:
       LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID:-}
       MATCH_DATABASE_PATH: ${MATCH_DATABASE_PATH:-/app/data/chess-harness.sqlite3}
       MATCH_MAX_ACTIVE: ${MATCH_MAX_ACTIVE:-1}
+      POSITIONS_DB_HOST: positions_db
+      POSITIONS_DB_PORT: 5432
+      POSITIONS_DB_NAME: ${POSITIONS_DB_NAME:-chess_positions}
+      POSITIONS_DB_USER: ${POSITIONS_DB_USER:-chess}
+      POSITIONS_DB_PASSWORD: ${POSITIONS_DB_PASSWORD:-chess_local}
+      POSITION_EVAL_NODES_PER_MOVE: ${POSITION_EVAL_NODES_PER_MOVE:-500000}
+      POSITION_EVAL_HASH_MB: ${POSITION_EVAL_HASH_MB:-128}
+      POSITION_EVAL_TIMEOUT_SECONDS: ${POSITION_EVAL_TIMEOUT_SECONDS:-180}
+      POSITION_QUEUE_ITEM_TIMEOUT_SECONDS: ${POSITION_QUEUE_ITEM_TIMEOUT_SECONDS:-1800}
     volumes:
       - ./backend/app:/app/app
       - ./backend/chess_core:/app/chess_core
@@ -51,3 +78,4 @@ services:
 volumes:
   frontend_node_modules:
   backend_data:
+  positions_data:

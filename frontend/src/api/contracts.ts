@@ -89,9 +89,16 @@ export interface MatchList {
 export interface PositionalTestPosition {
   id: string;
   name: string;
-  sourceFile: string;
-  white: string | null;
-  black: string | null;
+  datasetVersion: string;
+  split: "train" | "test";
+  phase: "opening" | "middlegame" | "endgame";
+  positionType: "quiet" | "tactical";
+  source: "lichess_game" | "lichess_puzzle";
+  sourceGameId: string;
+  sourceUrl: string;
+  opening: string | null;
+  themes: string[];
+  puzzleRating: number | null;
   sideToMove: PlayerColor;
   moveCount: number;
   position: PositionRecord;
@@ -135,6 +142,51 @@ export interface PositionalTestRun {
   attackReport: string | null;
 }
 
+export interface ModelRun {
+  id: string;
+  positionId: string;
+  model: string;
+  harness: string;
+  config: Record<string, unknown>;
+  status: "running" | "completed" | "failed";
+  finalMoveUci: string | null;
+  cpLoss: number | null;
+  classification: string | null;
+  expectedPointsLoss: number | null;
+  betterMoves: Record<string, unknown>[] | null;
+  evaluation: Record<string, unknown> | null;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface PassToolCall {
+  call_id: string | null;
+  tool_name: string;
+  arguments: unknown;
+  result: unknown;
+  error: string | null;
+  executed: boolean;
+  rolled_back?: boolean;
+  board_context?: Record<string, unknown>;
+}
+
+export interface ModelRunPass {
+  runId: string;
+  passNumber: number;
+  phase: string;
+  toolCalls: PassToolCall[];
+  workingNotes: string | null;
+  status: ModelRun["status"];
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface ModelRunDetail extends ModelRun { passes: ModelRunPass[] }
+export interface ModelRunList { items: ModelRun[]; total: number }
+export interface ModelRunFilters { positionId?: string; runId?: string; offset?: number }
+
 export interface StartMatchInput {
   whiteHarnessId: string;
   blackHarnessId: string;
@@ -142,7 +194,57 @@ export interface StartMatchInput {
   modelSelection?: ModelSelection;
 }
 
+export interface CreatePositionQueueInput {
+  split: "train" | "test";
+  datasetVersion: string;
+  harnessId: string;
+  modelSelection: ModelSelection;
+}
+
+export interface PositionQueueSummary {
+  id: string;
+  datasetVersion: string;
+  split: "train" | "test";
+  harnessId: string;
+  harnessName: string;
+  harnessVersion: string;
+  modelSelection: ModelSelection;
+  status: "queued" | "running" | "stopping" | "completed" | "stopped";
+  total: number;
+  completed: number;
+  failed: number;
+  pending: number;
+  running: number;
+  skipped: number;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface PositionQueueItem {
+  queueId: string;
+  ordinal: number;
+  positionId: string;
+  runId: string | null;
+  status: "queued" | "running" | "completed" | "failed" | "skipped";
+  phase: string;
+  positionType: string;
+  finalMoveUci: string | null;
+  classification: string | null;
+  failureStage: string | null;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface PositionQueueDetail extends PositionQueueSummary { items: PositionQueueItem[] }
+export interface PositionQueueList { items: PositionQueueSummary[] }
+
 export interface MatchApi {
+  listPositionQueues(): Promise<PositionQueueList>;
+  getPositionQueue(queueId: string): Promise<PositionQueueDetail>;
+  createPositionQueue(input: CreatePositionQueueInput): Promise<PositionQueueDetail>;
+  stopPositionQueue(queueId: string): Promise<PositionQueueDetail>;
   listHarnesses(): Promise<HarnessVersion[]>;
   listFolders(): Promise<GameFolderList>;
   createFolder(name: string): Promise<GameFolder>;
@@ -153,4 +255,6 @@ export interface MatchApi {
   assignMatchFolder(matchId: string, folderId: string | null): Promise<MatchDetail>;
   listPositionalTestPositions(): Promise<PositionalTestPositionList>;
   runPositionalTest(input: RunPositionalTestInput): Promise<PositionalTestRun>;
+  listModelRuns(filters?: ModelRunFilters): Promise<ModelRunList>;
+  getModelRun(runId: string): Promise<ModelRunDetail>;
 }

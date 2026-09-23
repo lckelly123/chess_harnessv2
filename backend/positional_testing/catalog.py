@@ -1,117 +1,89 @@
-"""Read saved PGNs and expose their final positions as immutable records."""
+"""Read the PostgreSQL library; expose exercise metadata without engine answers."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from io import StringIO
-from pathlib import Path
+from uuid import UUID
 
 import chess
-import chess.pgn
+import psycopg
 
+from .datasets import store
+from .datasets.validation import validate_position
 from .models import SavedPosition, SavedPositionSnapshot
-
-POSITION_DIRECTORY = Path(__file__).resolve().parent / "positions"
 
 
 class InvalidSavedPositionError(ValueError):
-    """A saved PGN could not be represented as a selectable position."""
+    """A stored position failed validation before being sent to a harness."""
+
+
+class PositionLibraryUnavailableError(RuntimeError):
+    """The PostgreSQL position library could not be read."""
 
 
 @dataclass(frozen=True, slots=True)
 class SavedPositionDocument:
-    """A saved position plus the source PGN used for one-turn harness input."""
-
     position: SavedPosition
     pgn: str
 
 
-def _header_value(game: chess.pgn.Game, name: str) -> str | None:
-    value = game.headers.get(name, "").strip()
-    return value if value and value != "?" else None
-
-
-def _position_paths(position_directory: Path) -> list[Path]:
-    if not position_directory.exists():
-        return []
-    return sorted(
-        position_directory.rglob("*.pgn"),
-        key=lambda path: path.relative_to(position_directory).as_posix().casefold(),
+def _summary(row: dict) -> SavedPosition:
+    board = chess.Board(row["fen"])
+    last = chess.Move.from_uci(row["last_move_uci"])
+    metadata = row["metadata"]
+    return SavedPosition(
+        id=str(row["id"]),
+        name=f"{row['phase'].capitalize()} · move {board.fullmove_number}",
+        dataset_version=row["dataset_version"],
+        split=row["split"],
+        phase=row["phase"],
+        position_type=row["position_type"],
+        source=row["source"],
+        source_game_id=row["source_game_id"],
+        source_url=row["source_url"],
+        opening=metadata.get("opening"),
+        themes=metadata.get("themes", []),
+        puzzle_rating=metadata.get("puzzle_rating"),
+        side_to_move="white" if board.turn else "black",
+        move_count=row["source_ply"],
+        position=SavedPositionSnapshot(
+            ply=row["source_ply"],
+            fen=row["fen"],
+            san=row["last_move_san"],
+            player="black" if board.turn else "white",
+            from_square=chess.square_name(last.from_square),
+            to_square=chess.square_name(last.to_square),
+        ),
     )
 
 
-def _read_position(path: Path, root: Path) -> SavedPositionDocument:
+def list_saved_positions() -> list[SavedPosition]:
     try:
-        pgn = path.read_text(encoding="utf-8-sig")
-        game = chess.pgn.read_game(StringIO(pgn))
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise InvalidSavedPositionError(
-            f"Could not read saved position {path.name}: {exc}"
+        return [_summary(row) for row in store.list_position_rows()]
+    except psycopg.Error as exc:
+        raise PositionLibraryUnavailableError(
+            "The position library is unavailable. Check the database service and retry."
         ) from exc
 
-    if game is None:
-        raise InvalidSavedPositionError(f"Saved position {path.name} is empty.")
-    if game.errors:
+
+def get_saved_position(position_id: str) -> SavedPositionDocument | None:
+    try:
+        identifier = str(UUID(position_id))
+    except ValueError:
+        return None
+    try:
+        row = store.get_position_row(identifier)
+    except psycopg.Error as exc:
+        raise PositionLibraryUnavailableError(
+            "The position library is unavailable. Check the database service and retry."
+        ) from exc
+    if row is None:
+        return None
+    row["id"] = str(row["id"])
+    try:
+        validate_position(row)
+    except (ValueError, KeyError) as exc:
         raise InvalidSavedPositionError(
-            f"Saved position {path.name} contains invalid PGN: {game.errors[0]}"
-        )
-
-    board = game.board()
-    last_san = "Initial position"
-    last_player: str | None = None
-    from_square: str | None = None
-    to_square: str | None = None
-
-    for move in game.mainline_moves():
-        last_san = board.san(move)
-        last_player = "white" if board.turn == chess.WHITE else "black"
-        from_square = chess.square_name(move.from_square)
-        to_square = chess.square_name(move.to_square)
-        board.push(move)
-
-    relative_path = path.relative_to(root)
-    event = _header_value(game, "Event")
-    return SavedPositionDocument(
-        position=SavedPosition(
-            id=relative_path.with_suffix("").as_posix(),
-            name=event or path.stem.replace("_", " ").title(),
-            source_file=relative_path.as_posix(),
-            white=_header_value(game, "White"),
-            black=_header_value(game, "Black"),
-            side_to_move="white" if board.turn == chess.WHITE else "black",
-            move_count=board.ply(),
-            position=SavedPositionSnapshot(
-                ply=board.ply(),
-                fen=board.fen(),
-                san=last_san,
-                player=last_player,
-                from_square=from_square,
-                to_square=to_square,
-            ),
-        ),
-        pgn=pgn,
-    )
-
-
-def list_saved_positions(
-    position_directory: Path = POSITION_DIRECTORY,
-) -> list[SavedPosition]:
-    """Return each PGN under the saved-position directory in stable order."""
-
-    return [
-        _read_position(path, position_directory).position
-        for path in _position_paths(position_directory)
-    ]
-
-
-def get_saved_position(
-    position_id: str,
-    position_directory: Path = POSITION_DIRECTORY,
-) -> SavedPositionDocument | None:
-    """Return one catalogued position by stable ID, including its source PGN."""
-
-    for path in _position_paths(position_directory):
-        relative_path = path.relative_to(position_directory)
-        if relative_path.with_suffix("").as_posix() == position_id:
-            return _read_position(path, position_directory)
-    return None
+            "This position's stored history is inconsistent. Revalidate the dataset before running it."
+        ) from exc
+    return SavedPositionDocument(position=_summary(row), pgn=row["pgn_prefix"])

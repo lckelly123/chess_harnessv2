@@ -5,6 +5,10 @@ import type {
   MatchApi,
   MatchDetail,
   MatchList,
+  ModelRunList,
+  ModelRunDetail,
+  PositionQueueDetail,
+  PositionQueueList,
   PositionalTestPositionList,
   PositionalTestRun,
   RunPositionalTestInput,
@@ -36,6 +40,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const matchApi: MatchApi = {
+  listPositionQueues: () => request<PositionQueueList>("/api/positional-testing/queues"),
+  getPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}`),
+  createPositionQueue: (input) => request<PositionQueueDetail>("/api/positional-testing/queues", { method: "POST", body: JSON.stringify(input) }),
+  stopPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}/stop`, { method: "POST" }),
   listHarnesses: () => request<HarnessVersion[]>("/api/harnesses"),
   listFolders: () => request<GameFolderList>("/api/folders"),
   createFolder: (name) =>
@@ -64,6 +72,13 @@ export const matchApi: MatchApi = {
     }),
   listPositionalTestPositions: () =>
     request<PositionalTestPositionList>("/api/positional-testing/positions"),
+  listModelRuns: (filters = {}) => {
+    const parameters = new URLSearchParams({ limit: "30", offset: String(filters.offset ?? 0) });
+    if (filters.positionId) parameters.set("position_id", filters.positionId);
+    if (filters.runId) parameters.set("run_id", filters.runId);
+    return request<ModelRunList>(`/api/positional-testing/runs?${parameters}`);
+  },
+  getModelRun: (runId) => request<ModelRunDetail>(`/api/positional-testing/runs/${encodeURIComponent(runId)}`),
   runPositionalTest: (input: RunPositionalTestInput) =>
     request<PositionalTestRun>("/api/positional-testing/runs", {
       method: "POST",
