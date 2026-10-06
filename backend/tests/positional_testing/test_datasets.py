@@ -208,7 +208,7 @@ def test_postgres_failed_import_rolls_back_entire_dataset(postgres):
     with pytest.raises(psycopg.errors.CheckViolation):
         postgres.import_collection(SEED)
     with postgres.connect() as conn:
-        for table in ("position_datasets", "positions", "position_evaluations"):
+        for table in ("positions", "model_runs", "model_run_passes"):
             assert (
                 conn.execute(f"SELECT count(*) AS n FROM {table}").fetchone()["n"] == 0
             )

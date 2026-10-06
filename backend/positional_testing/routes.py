@@ -82,6 +82,7 @@ def list_model_runs(
     request: Request,
     position_id: UUID | None = None,
     run_id: UUID | None = None,
+    queue_tag: UUID | None = None,
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> ModelRunList:
@@ -89,6 +90,7 @@ def list_model_runs(
         items, total = _runner(request).repository.list(
             position_id,
             run_id,
+            queue_tag=queue_tag,
             limit=limit,
             offset=offset,
         )

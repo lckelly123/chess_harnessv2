@@ -127,9 +127,10 @@ def test_evaluation_failure_preserves_successful_model_trace(library_rows, run_s
         runner.run_once(library_rows[0]["id"], "agent-player-3-langgraph-v1")
     )
     stored = run_store.get(result.run_id)
-    assert stored["status"] == "completed"
+    assert stored["status"] == "failed"
+    assert stored["failure_stage"] == "evaluation"
     assert stored["final_move_uci"] == "e4e5"
-    assert stored["error"] is None
+    assert stored["error"] == "Engine timed out"
     assert stored["classification"] is None
     assert stored["better_moves"] is None
     assert stored["evaluation"]["error"] == "Engine timed out"
@@ -154,6 +155,7 @@ def test_evaluation_cancellation_keeps_move_and_does_not_backfill(
         )
     assert run_store.get("legacy")["evaluation"] is None
     new_run = next(row for key, row in run_store.runs.items() if key != "legacy")
-    assert new_run["status"] == "completed"
+    assert new_run["status"] == "failed"
+    assert new_run["failure_stage"] == "evaluation"
     assert new_run["final_move_uci"] == "e4e5"
     assert new_run["evaluation"]["status"] == "failed"

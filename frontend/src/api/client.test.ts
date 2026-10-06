@@ -20,12 +20,12 @@ describe("matchApi", () => {
     expect(fetchMock.mock.calls[3]).toEqual(["/api/positional-testing/queues/queue%2Fid/stop", expect.objectContaining({ method: "POST" })]);
   });
 
-  it("filters persistent runs by both IDs and loads a run's passes", async () => {
+  it("combines position, run, and full-queue filters and loads a run's passes", async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 })));
     vi.stubGlobal("fetch", fetchMock);
-    await matchApi.listModelRuns({ positionId: "position-id", runId: "run-id", offset: 30 });
+    await matchApi.listModelRuns({ positionId: "position-id", runId: "run-id", queueTag: "queue-id", offset: 30 });
     await matchApi.getModelRun("run-id");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/positional-testing/runs?limit=30&offset=30&position_id=position-id&run_id=run-id");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/positional-testing/runs?limit=30&offset=30&position_id=position-id&run_id=run-id&queue_tag=queue-id");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/positional-testing/runs/run-id");
   });
   it.each(["qwen", "gpt-terra"] as const)("includes the requested %s model and medium reasoning on new runs", async (modelId) => {

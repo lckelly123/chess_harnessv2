@@ -1,0 +1,14 @@
+<running_thoughts>
+Vulnerabilities: Black is not in check and has no queen. Canonically Qd1 attacks Nc2 and Re2; Re1 and Bh5 also attack Re2. Ignoring these attacks risks material. The checking exchange forces White to respond.
+
+Opportunities: Rxe1+ Qxe1 exchanges rooks: the verified material change is zero, not +500. The queen now occupies e1, and Nxe1 is a listed capture by Nc2. Its result and White's response remain untested.
+
+Synthesis: Top-line candidate: Rxe1+, provisionally for its forcing queen deflection. The tested exchange alone does not improve the -360 balance. Correct both annotations and test Nxe1 before calling the line decisive or submitting.
+</running_thoughts>
+<agent_tool_calls>
+[
+  {"tool":"annotate_branch","arguments":{"branch_id":"B1","annotation":"Rxe1+ captures a rook, but tested Qxe1 recaptures Black's rook: cumulative material change is 0 cp. No queen has yet been captured. Further continuation is unresolved."}},
+  {"tool":"annotate_branch","arguments":{"branch_id":"B1.1","annotation":"Qxe1 completes an equal rook exchange. Black remains at -360 material cp, a 0 cp change from canonical; White's queen is on e1."}},
+  {"tool":"scratch_play_move","arguments":{"move":"Nxe1"}}
+]
+</agent_tool_calls>

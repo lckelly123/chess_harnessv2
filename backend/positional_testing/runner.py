@@ -46,7 +46,7 @@ class PositionalTestRunner:
         harness_id: str,
         model_selection: ModelSelection | None = None,
         *,
-        queue_item: tuple[str, int] | None = None,
+        queued_run_id: str | None = None,
     ) -> SavedPositionRun:
         document = await run_in_threadpool(get_saved_position, position_id)
         if document is None:
@@ -54,23 +54,33 @@ class PositionalTestRunner:
 
         definition = self._catalog.definition(harness_id)
         position = document.position
-        run_id = self._id_factory()
+        run_id = queued_run_id or self._id_factory()
         config = {
             "harness_name": definition.name,
             "harness_version": definition.version,
         }
-        if queue_item is not None:
-            config.update(queue_id=queue_item[0], queue_ordinal=queue_item[1])
         requested_model = model_selection.model_id if model_selection else "qwen"
-        await run_in_threadpool(
-            self.repository.create,
-            run_id,
-            position.id,
-            requested_model,
-            definition.id,
-            config,
-            **({"queue_item": queue_item} if queue_item is not None else {}),
-        )
+        if queued_run_id is not None:
+            existing = await run_in_threadpool(self.repository.get, run_id)
+            if (
+                not existing
+                or existing["queue_tag"] is None
+                or existing["status"] != "running"
+                or str(existing["position_id"]) != position.id
+                or existing["harness"] != definition.id
+            ):
+                raise ValueError(
+                    "Queued run is not claimed for this position and harness."
+                )
+        else:
+            await run_in_threadpool(
+                self.repository.create,
+                run_id,
+                position.id,
+                requested_model,
+                definition.id,
+                config,
+            )
         recorder = PassRecorder(self.repository, run_id)
         token = current_recorder.set(recorder)
         try:
@@ -107,8 +117,8 @@ class PositionalTestRunner:
         finally:
             current_recorder.reset(token)
 
-        # Grading is never visible to the agent and cannot change a successful
-        # model turn into a model failure. Keep history polling until it finishes.
+        # Grading cannot erase the model's answer or passes. Its failure is a
+        # failed attempt with failure_stage=evaluation, distinct from execution.
         await run_in_threadpool(self.repository.save_move, run_id, decision.move.uci)
         try:
             grade = await self.evaluator.evaluate(

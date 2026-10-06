@@ -90,7 +90,7 @@ class PositionQueueManager:
                 await run_in_threadpool(lease.close)
 
     async def execute_item(self, queue, item):
-        queue_id, ordinal = str(queue["id"]), item["ordinal"]
+        run_id = str(item["run_id"])
         error = failure_stage = None
         try:
             async with asyncio.timeout(self.item_timeout):
@@ -98,7 +98,7 @@ class PositionQueueManager:
                     str(item["position_id"]),
                     queue["harness_id"],
                     ModelSelection.model_validate(queue["model_selection"]),
-                    queue_item=(queue_id, ordinal),
+                    queued_run_id=run_id,
                 )
                 run = await run_in_threadpool(self.runner.repository.get, result.run_id)
                 evaluation = (run or {}).get("evaluation") or {}
@@ -113,8 +113,7 @@ class PositionQueueManager:
             # with unstarted positions; it never silently retries a paid call.
             await run_in_threadpool(
                 self.repository.finish_item,
-                queue_id,
-                ordinal,
+                run_id,
                 error="Worker interrupted before this position finished.",
                 failure_stage="interrupted",
             )
@@ -129,8 +128,7 @@ class PositionQueueManager:
             error = str(exc) or type(exc).__name__
         await run_in_threadpool(
             self.repository.finish_item,
-            queue_id,
-            ordinal,
+            run_id,
             error=error,
             failure_stage=failure_stage,
         )

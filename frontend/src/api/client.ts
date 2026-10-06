@@ -76,6 +76,7 @@ export const matchApi: MatchApi = {
     const parameters = new URLSearchParams({ limit: "30", offset: String(filters.offset ?? 0) });
     if (filters.positionId) parameters.set("position_id", filters.positionId);
     if (filters.runId) parameters.set("run_id", filters.runId);
+    if (filters.queueTag) parameters.set("queue_tag", filters.queueTag);
     return request<ModelRunList>(`/api/positional-testing/runs?${parameters}`);
   },
   getModelRun: (runId) => request<ModelRunDetail>(`/api/positional-testing/runs/${encodeURIComponent(runId)}`),

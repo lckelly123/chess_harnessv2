@@ -94,18 +94,21 @@ class SavedPositionRun(PositionalTestingModel):
 class ModelRunSummary(PositionalTestingModel):
     id: UUID
     position_id: UUID
+    queue_tag: UUID | None = None
     model: str
     harness: str
     config: dict[str, Any]
-    status: Literal["running", "completed", "failed"]
+    status: Literal["queued", "running", "completed", "failed", "skipped"]
     final_move_uci: str | None = None
     cp_loss: int | None = None
     classification: str | None = None
     expected_points_loss: float | None = None
     better_moves: list[dict[str, Any]] | None = None
     evaluation: dict[str, Any] | None = None
+    failure_stage: str | None = None
     error: str | None = None
-    started_at: datetime
+    created_at: datetime
+    started_at: datetime | None = None
     finished_at: datetime | None = None
 
 
@@ -166,7 +169,7 @@ class PositionQueueSummary(PositionalTestingModel):
 
 
 class PositionQueueItem(PositionalTestingModel):
-    queue_id: UUID
+    queue_tag: UUID
     ordinal: int
     position_id: UUID
     run_id: UUID | None = None

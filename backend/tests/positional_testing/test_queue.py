@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from pathlib import Path
 from uuid import uuid4
@@ -134,6 +135,17 @@ def test_full_queue_is_sequential_and_continues_after_model_and_evaluation_failu
     assert manager.catalog.calls == 200
     assert manager.catalog.selections == [request.model_selection] * 200
     assert len({item["run_id"] for item in result["items"]}) == 200
+    first_page, total = manager.runner.repository.list(
+        queue_tag=result["id"], limit=100
+    )
+    last_page, _ = manager.runner.repository.list(
+        queue_tag=result["id"], limit=100, offset=100
+    )
+    assert total == 200
+    assert {r["id"] for r in first_page + last_page} == {
+        item["run_id"] for item in result["items"]
+    }
+    assert all(r["queue_tag"] == result["id"] for r in first_page + last_page)
     model_failure, eval_failure = result["items"][1:3]
     assert model_failure["failure_stage"] == "execution"
     assert model_failure["error"] == "Scripted provider failure"
@@ -144,10 +156,55 @@ def test_full_queue_is_sequential_and_continues_after_model_and_evaluation_failu
     assert eval_failure["error"] == "Scripted engine failure"
     # An engine failure retains the submitted move and completed model trace.
     eval_run = manager.runner.repository.get(eval_failure["run_id"])
-    assert eval_run["status"] == "completed"
+    assert eval_run["status"] == "failed"
+    assert eval_run["failure_stage"] == "evaluation"
     assert eval_run["evaluation"]["status"] == "failed"
     assert result["items"][-1]["classification"] == "blunder"
     assert result["items"][-1]["status"] == "completed"
+
+
+def test_queue_rows_exist_before_execution_and_tag_filters_combine(queue_env):
+    manager, request = queue_env
+    queue = asyncio.run(manager.enqueue(request))
+    runs = manager.runner.repository
+    rows, total = runs.list(queue_tag=queue["id"], limit=100)
+    assert total == 200
+    assert all(r["status"] == "queued" and r["started_at"] is None for r in rows)
+    original_ids = {i["run_id"] for i in queue["items"]}
+    q, item = manager.repository.claim_next()
+    assert manager.repository.claim_next() is None
+    runs.configure(item["run_id"], "resolved-model", {"custom": 123})
+    assert runs.get(item["run_id"])["config"]["queue"]["split"] == request.split
+    asyncio.run(manager.execute_item(q, item))
+    assert {
+        i["run_id"] for i in manager.repository.get_queue(q["id"])["items"]
+    } == original_ids
+    standalone_id = uuid4()
+    runs.create(standalone_id, item["position_id"], "offline", q["harness_id"], {})
+    runs.finish(standalone_id, move="a2a3")
+    assert runs.get(standalone_id)["queue_tag"] is None
+    assert runs.list(run_id=standalone_id, queue_tag=q["id"]) == ([], 0)
+    app = create_app(repository=MatchRepository(":memory:"), catalog=manager.catalog)
+    with TestClient(app) as client:
+        path = "/api/positional-testing/runs"
+        response = client.get(path, params={"queue_tag": str(q["id"])})
+        assert response.status_code == 200
+        assert response.json()["total"] == 200
+        assert all(r["queueTag"] == str(q["id"]) for r in response.json()["items"])
+        assert client.get(f"{path}/{standalone_id}").json()["queueTag"] is None
+        assert (
+            client.get(
+                path,
+                params={
+                    "queue_tag": str(q["id"]),
+                    "run_id": str(item["run_id"]),
+                    "position_id": str(item["position_id"]),
+                },
+            ).json()["total"]
+            == 1
+        )
+        assert client.get(path, params={"queue_tag": str(uuid4())}).json()["total"] == 0
+        assert client.get(path, params={"queue_tag": "invalid"}).status_code == 422
 
 
 def test_full_split_membership_duplicate_start_and_stop_before_start(
@@ -173,7 +230,54 @@ def test_full_split_membership_duplicate_start_and_stop_before_start(
     assert stopped["skipped"] == 200
     assert stopped["completed"] == stopped["failed"] == 0
     assert len(manager.repository.list_queues()) == 1
-    assert manager.runner.repository.list()[1] == 0
+    assert manager.runner.repository.list()[1] == 200
+
+
+def test_concurrent_enqueues_and_claims_are_serialized(queue_env):
+    manager, request = queue_env
+
+    def enqueue():
+        try:
+            return QueueRepository().enqueue(
+                dataset_version=request.dataset_version,
+                split=request.split,
+                definition=manager.catalog.definition(request.harness_id),
+                model_selection=request.model_selection,
+            )
+        except QueueConflictError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: enqueue(), range(2)))
+    assert sum(result is not None for result in results) == 1
+    assert manager.runner.repository.list()[1] == 200
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = list(pool.map(lambda _: QueueRepository().claim_next(), range(2)))
+    assert sum(claim is not None for claim in claims) == 1
+    queue = manager.repository.list_queues()[0]
+    assert queue["running"] == 1 and queue["pending"] == 199
+
+
+def test_invalid_position_is_failed_on_its_scheduled_run_and_queue_continues(
+    queue_env, postgres
+):
+    manager, request = queue_env
+    queued = asyncio.run(manager.enqueue(request))
+    first_id = queued["items"][0]["run_id"]
+    with postgres.connect() as conn:
+        conn.execute(
+            "UPDATE positions SET pgn_prefix = '*' WHERE id = %s",
+            (queued["items"][0]["position_id"],),
+        )
+    asyncio.run(manager.execute_item(*manager.repository.claim_next()))
+    asyncio.run(manager.execute_item(*manager.repository.claim_next()))
+    first = manager.runner.repository.get(first_id)
+    assert first["status"] == "failed" and first["failure_stage"] == "position"
+    assert first["passes"] == []
+    assert (
+        manager.repository.get_queue(queued["id"])["items"][1]["status"] == "completed"
+    )
+    assert manager.catalog.calls == 1
 
 
 def test_stop_waits_for_current_then_skips_remaining(queue_env):
@@ -228,17 +332,9 @@ def test_restart_recovers_only_queue_attempts_and_does_not_repeat_paid_calls(que
     manager, request = queue_env
     queue = asyncio.run(manager.enqueue(request))
     q, item = manager.repository.claim_next()
-    run_id, unrelated_id = str(uuid4()), str(uuid4())
+    run_id, unrelated_id = item["run_id"], str(uuid4())
     runs = RunRepository()
     runs.create(unrelated_id, item["position_id"], "old", "old", {})
-    runs.create(
-        run_id,
-        item["position_id"],
-        "offline",
-        q["harness_id"],
-        {},
-        queue_item=(q["id"], item["ordinal"]),
-    )
     # Simulate process death without a normal finally handler.
     restarted = QueueRepository()
     lease = restarted.acquire_worker()
@@ -262,15 +358,7 @@ def test_recovery_keeps_success_saved_just_before_crash(queue_env):
     manager, request = queue_env
     queue = asyncio.run(manager.enqueue(request))
     q, item = manager.repository.claim_next()
-    run_id = str(uuid4())
-    manager.runner.repository.create(
-        run_id,
-        item["position_id"],
-        "offline",
-        q["harness_id"],
-        {},
-        queue_item=(q["id"], item["ordinal"]),
-    )
+    run_id = item["run_id"]
     manager.runner.repository.finish(
         run_id, move="a2a3", grade={"evaluation": {"status": "completed"}}
     )
@@ -291,7 +379,8 @@ def test_queue_api_contract_and_validation(queue_env):
         body = created.json()
         assert body["total"] == body["pending"] == 200
         assert body["modelSelection"]["modelId"] == "gpt-terra"
-        assert body["items"][0]["runId"] is None
+        assert body["items"][0]["runId"] is not None
+        assert body["items"][0]["queueTag"] == body["id"]
         assert (
             client.post("/api/positional-testing/queues", json=payload).status_code
             == 409
@@ -302,7 +391,7 @@ def test_queue_api_contract_and_validation(queue_env):
         )
         path = "/api/positional-testing/queues/" + body["id"]
         assert client.get(path).json()["items"] == body["items"]
-        assert client.post(path + "/stop").json()["status"] == "stopping"
+        assert client.post(path + "/stop").json()["status"] == "stopped"
         assert client.post(path + "/stop").status_code == 200
         assert (
             client.post(

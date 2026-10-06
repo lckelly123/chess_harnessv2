@@ -1,0 +1,13 @@
+<running_thoughts>
+Vulnerabilities: White's king is not in check and its queen on g4 is not attacked in canonical. Black's rook f8 targets f2 and bishop d6 targets h2, but the verified mate prevents any opponent reply.
+
+Opportunities: B1 has tested Qxg7#: Black is in check with no legal moves. The queen on g7 is protected by bishop b2. This is a verified terminal result, with +100 material cp from canonical.
+
+Synthesis: Top-line candidate: Qxg7#. The verified mate resolves the position immediately and takes priority over nonterminal alternatives. Annotate B1 and submit its canonical move; no further reply test is needed.
+</running_thoughts>
+<agent_tool_calls>
+[
+  {"tool":"annotate_branch","arguments":{"branch_id":"B1","annotation":"Qxg7# is verified checkmate: Black is in check with no legal moves, and bishop b2 protects the queen on g7. Material change is +100 cp; the game ends before any reply."}},
+  {"tool":"submit_move","arguments":{"move":"Qxg7#","tested_branch":"B1","decision_summary":"Submit the verified attacking finish Qxg7#. B1 is terminal checkmate, so it resolves all defensive concerns and is decisive over nonterminal alternatives; no opponent reply exists."}}
+]
+</agent_tool_calls>

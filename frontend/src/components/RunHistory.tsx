@@ -36,7 +36,7 @@ function Pass({ pass }: { pass: ModelRunPass }) {
   );
 }
 
-function RunDetail({ runId, refresh }: { runId: string; refresh: number }) {
+function RunDetail({ runId, refresh, onQueueFilter }: { runId: string; refresh: number; onQueueFilter: (queueTag: string) => void }) {
   const [run, setRun] = useState<ModelRunDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
@@ -49,7 +49,7 @@ function RunDetail({ runId, refresh }: { runId: string; refresh: number }) {
         if (cancelled) return;
         setRun(result);
         setError(null);
-        if (result.status === "running") timer = setTimeout(() => void load(), 2000);
+        if ((result.status === "running" || result.status === "queued")) timer = setTimeout(() => void load(), 2000);
       } catch (caught) {
         if (!cancelled) setError(errorMessage(caught));
       }
@@ -63,18 +63,19 @@ function RunDetail({ runId, refresh }: { runId: string; refresh: number }) {
   return (
     <section className="run-detail" aria-label="Selected run">
       <header className="run-detail__header">
-        <div><h3>{String(run.config.harness_name ?? run.harness)}</h3><p>{run.model} · {time(run.startedAt)}</p></div>
+        <div><h3>{String(run.config.harness_name ?? run.harness)}</h3><p>{run.model} · {time(run.startedAt ?? run.createdAt)}</p></div>
         <span className={`run-status run-status--${run.status}`}>{run.status}</span>
       </header>
+      {run.queueTag ? <div className="run-queue-origin"><span>Full queue run <code>{run.queueTag}</code></span><button type="button" onClick={() => onQueueFilter(run.queueTag!)}>View queue runs</button></div> : null}
       <dl className="run-outcome">
-        <div><dt>Chosen move</dt><dd className="run-outcome__move">{run.finalMoveUci ?? (run.status === "running" ? "Awaiting move" : "No move submitted")}</dd></div>
+        <div><dt>Chosen move</dt><dd className="run-outcome__move">{run.finalMoveUci ?? ((run.status === "running" || run.status === "queued") ? "Awaiting move" : "No move submitted")}</dd></div>
         <div><dt>Stockfish evaluation</dt><dd>{run.classification ?? "Not evaluated"}</dd><small>{run.cpLoss !== null ? `${run.cpLoss} cp loss` : "No score recorded"}</small></div>
       </dl>
       <details className="run-metadata"><summary>Run details</summary><dl><div><dt>Position ID</dt><dd>{run.positionId}</dd></div><div><dt>Run ID</dt><dd>{run.id}</dd></div></dl><pre>{json(run.config)}</pre>{run.evaluation ? <pre>{json(run.evaluation)}</pre> : null}</details>
       {run.error ? <p className="run-detail__error run-failure">{run.error}</p> : null}
       <div className="run-passes-heading"><h3>Model passes</h3><span>{run.passes.length} recorded</span></div>
       <div className="run-passes" key={run.id} tabIndex={0} role="region" aria-label="Model pass timeline">
-        {run.passes.length ? run.passes.map((pass) => <Pass key={pass.passNumber} pass={pass} />) : <p className="run-history__state">{run.status === "running" ? "Waiting for the first model pass…" : "No model passes were recorded for this run."}</p>}
+        {run.passes.length ? run.passes.map((pass) => <Pass key={pass.passNumber} pass={pass} />) : <p className="run-history__state">{run.status === "queued" ? "Queued. Model passes will appear when this position starts." : run.status === "running" ? "Waiting for the first model pass…" : "No model passes were recorded for this run."}</p>}
       </div>
     </section>
   );
@@ -91,6 +92,7 @@ export function RunHistory({ positionId, preferredRunId, revision, running }: Ru
   const id = useId();
   const [positionFilter, setPositionFilter] = useState(positionId);
   const [runFilter, setRunFilter] = useState(preferredRunId ?? "");
+  const [queueFilter, setQueueFilter] = useState("");
   const [filters, setFilters] = useState<ModelRunFilters>({ positionId, runId: preferredRunId, offset: 0 });
   const [runs, setRuns] = useState<ModelRun[]>([]);
   const [total, setTotal] = useState(0);
@@ -132,23 +134,30 @@ export function RunHistory({ positionId, preferredRunId, revision, running }: Ru
     setSelectedId("");
     setFilters(next);
   };
+  const viewQueue = (queueTag: string) => {
+    setPositionFilter("");
+    setRunFilter("");
+    setQueueFilter(queueTag);
+    apply({ queueTag, offset: 0 });
+  };
   return (
     <section className="run-history" id="positional-run-history" aria-labelledby={`${id}-title`} tabIndex={-1}>
       <header className="run-history__header"><div><h2 id={`${id}-title`}>Run history</h2><p>Review the chosen move, working notes, and tool results from each attempt.</p></div><button type="button" aria-label="Refresh run history" onClick={() => setRefresh(refresh + 1)}><RefreshCw size={15} aria-hidden="true" /> Refresh</button></header>
-      <form className="run-history__filters" onSubmit={(event) => { event.preventDefault(); apply({ positionId: positionFilter.trim(), runId: runFilter.trim(), offset: 0 }); }}>
+      <form className="run-history__filters" onSubmit={(event) => { event.preventDefault(); apply({ positionId: positionFilter.trim(), runId: runFilter.trim(), queueTag: queueFilter.trim(), offset: 0 }); }}>
         <label className="field-control" htmlFor={`${id}-position`}><span>Position ID</span><input id={`${id}-position`} value={positionFilter} pattern={UUID_PATTERN} placeholder="All positions" onChange={(event) => setPositionFilter(event.target.value)} /></label>
         <label className="field-control" htmlFor={`${id}-run`}><span>Run ID</span><input id={`${id}-run`} value={runFilter} pattern={UUID_PATTERN} placeholder="All runs for this position" onChange={(event) => setRunFilter(event.target.value)} /></label>
+        <label className="field-control" htmlFor={`${id}-queue`}><span>Queue tag</span><input id={`${id}-queue`} value={queueFilter} pattern={UUID_PATTERN} placeholder="All queues" onChange={(event) => setQueueFilter(event.target.value)} /></label>
         <button type="submit"><Search size={15} aria-hidden="true" /> Filter runs</button>
-        <button type="button" onClick={() => { setPositionFilter(""); setRunFilter(""); apply({ offset: 0 }); }}>All runs</button>
+        <button type="button" onClick={() => { setPositionFilter(""); setRunFilter(""); setQueueFilter(""); apply({ offset: 0 }); }}>All runs</button>
       </form>
-      {loading ? <div className="run-history__state" role="status">Loading run history…</div> : error ? <div className="run-history__state" role="alert"><p>{error}</p><button type="button" onClick={() => { setLoading(true); setRefresh(refresh + 1); }}>Retry history</button></div> : runs.length === 0 ? <div className="run-history__state"><h3>No runs found</h3><p>{filters.runId ? "Check the run and position IDs, or choose All runs." : "Run a positional test to start recording model passes here."}</p></div> : (
+      {loading ? <div className="run-history__state" role="status">Loading run history…</div> : error ? <div className="run-history__state" role="alert"><p>{error}</p><button type="button" onClick={() => { setLoading(true); setRefresh(refresh + 1); }}>Retry history</button></div> : runs.length === 0 ? <div className="run-history__state"><h3>No runs found</h3><p>{filters.runId || filters.queueTag ? "Check the position, run, and queue IDs, or choose All runs." : "Run a positional test to start recording model passes here."}</p></div> : (
         <div className="run-history__workspace">
           <aside className="run-index" aria-label="Saved model runs">
             <p className="run-index__count">{total} {total === 1 ? "run" : "runs"}{running ? " · updating live" : ""}</p>
-            <div className="run-index__list">{runs.map((run) => <button type="button" className={`run-row${selectedId === run.id ? " run-row--selected" : ""}`} key={run.id} aria-pressed={selectedId === run.id} onClick={() => setSelectedId(run.id)}><span><strong>{String(run.config.harness_name ?? run.harness)}</strong><small className={`run-status run-status--${run.status}`}>{run.status}</small></span><span>{run.model}</span><code>{run.id}</code><small>{time(run.startedAt)}{run.finalMoveUci ? ` · ${run.finalMoveUci}` : ""}</small></button>)}</div>
+            <div className="run-index__list">{runs.map((run) => <button type="button" className={`run-row${selectedId === run.id ? " run-row--selected" : ""}`} key={run.id} aria-pressed={selectedId === run.id} onClick={() => setSelectedId(run.id)}><span><strong>{String(run.config.harness_name ?? run.harness)}</strong><small className={`run-status run-status--${run.status}`}>{run.status}</small></span><span>{run.model}</span><code>{run.id}</code>{run.queueTag ? <span title={`Full queue run ${run.queueTag}`}>Full queue run · <code>{run.queueTag.slice(0, 8)}</code></span> : null}<small>{time(run.startedAt ?? run.createdAt)}{run.finalMoveUci ? ` · ${run.finalMoveUci}` : ""}</small></button>)}</div>
             {total > PAGE_SIZE ? <div className="position-pagination"><button type="button" aria-label="Previous runs" disabled={!filters.offset} onClick={() => apply({ ...filters, offset: (filters.offset ?? 0) - PAGE_SIZE })}><ChevronLeft size={16} /></button><span>{(filters.offset ?? 0) + 1}–{Math.min(total, (filters.offset ?? 0) + PAGE_SIZE)} of {total}</span><button type="button" aria-label="Next runs" disabled={(filters.offset ?? 0) + PAGE_SIZE >= total} onClick={() => apply({ ...filters, offset: (filters.offset ?? 0) + PAGE_SIZE })}><ChevronRight size={16} /></button></div> : null}
           </aside>
-          {selectedId ? <RunDetail key={selectedId} runId={selectedId} refresh={refresh + revision} /> : null}
+          {selectedId ? <RunDetail key={selectedId} runId={selectedId} refresh={refresh + revision} onQueueFilter={viewQueue} /> : null}
         </div>
       )}
     </section>

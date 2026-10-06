@@ -37,11 +37,11 @@ The TypeScript source of truth for the client is [`frontend/src/api/contracts.ts
 | `GET` | `/api/positional-testing/positions` | Reads the PostgreSQL position library. Returns UUID, name, datasetVersion, split, phase, positionType, source/game/link, opening, themes, puzzleRating, sideToMove, moveCount, and board snapshot. History and engine references are excluded. The small-library UI filters these summaries locally. |
 | `POST` | `/api/positional-testing/queues` | Accepts `datasetVersion`, `split` (`train`/`test`), `harnessId`, and optional `modelSelection`; snapshots all matching IDs and configuration, returns 202 with queue detail. Empty set/unknown harness returns 422; another active queue returns 409. Execution runs independently of the request. |
 | `GET` | `/api/positional-testing/queues` | Latest 20 queue summaries with durable completed/failed/pending/running/skipped counts. |
-| `GET` | `/api/positional-testing/queues/{queueId}` | Queue summary and all ordered items, including position/run IDs, tags, chosen move/classification, status, failure stage/error, and timestamps. Unknown UUID returns 404. |
+| `GET` | `/api/positional-testing/queues/{queueId}` | Derived queue summary and all ordered run rows (each has a run ID from enqueue), including position/run IDs, tags, chosen move/classification, status, failure stage/error, and timestamps. Unknown UUID returns 404. |
 | `POST` | `/api/positional-testing/queues/{queueId}/stop` | Idempotent stop-after-current request. The current attempt finishes; unstarted positions are marked skipped. Unknown UUID returns 404. |
 | `POST` | `/api/positional-testing/runs` | Loads the position UUID from PostgreSQL, verifies its PGN reproduces the FEN/last move, and invokes the selected harness once. Only board/history enter the turn request. Returns the move and reports without persisting a match or changing the library. Unknown IDs return 404, database failures 503, and inconsistent history 500. |
-| `GET` | `/api/positional-testing/runs` | Persistent attempts, newest first. Optional exact `position_id` and `run_id` UUID filters combine; `limit` is 1–100 (default 30), `offset` defaults to 0. Returns `items` and `total`; summaries omit passes. |
-| `GET` | `/api/positional-testing/runs/{runId}` | One attempt with ordered `passes`. Each pass has `passNumber`, `phase`, emitted `workingNotes`, grouped `toolCalls`, status/error and timestamps. Unknown UUID returns 404; malformed UUID returns 422; unavailable database returns 503. |
+| `GET` | `/api/positional-testing/runs` | Persistent attempts, newest first. Optional exact `position_id`, `run_id`, and `queue_tag` UUID filters combine; `limit` is 1–100 (default 30), `offset` defaults to 0. Returns `items` and `total`; summaries omit passes and include queued/skipped rows, `createdAt`, nullable `startedAt`, and `failureStage`. Each summary includes nullable `queueTag`, the grouping UUID shared by every scheduled attempt in that batch. Standalone attempts have `queueTag: null`. |
+| `GET` | `/api/positional-testing/runs/{runId}` | One attempt with nullable `queueTag` and ordered `passes`. Each pass has `passNumber`, `phase`, emitted `workingNotes`, grouped `toolCalls`, status/error and timestamps. Unknown UUID returns 404; malformed UUID returns 422; unavailable database returns 503. |
 
 FastAPI also exposes an interactive schema at [http://localhost:8000/docs](http://localhost:8000/docs) while the Docker stack is running.
 
@@ -92,7 +92,8 @@ strictly better target. Each entry uses snake_case keys: `rank`, `move_uci`,
 
 `evaluation` records engine identity/hash, the versioned policy, search budget,
 complete depth, legal/evaluated counts, timestamps, and `best`/`chosen` move
-details. A grading failure preserves the completed model turn and records
+details. A grading failure preserves the chosen move and completed passes, sets
+the run's `status = "failed"` and `failureStage = "evaluation"`, and records
 `evaluation.status = "failed"` and an `error`; its numerical scores and targets
 stay null. Older runs stay null and are never backfilled. Mate scores keep CP
 loss null. The existing UI displays the classification and CP loss, with the

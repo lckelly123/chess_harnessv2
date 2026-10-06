@@ -1,24 +1,30 @@
-"""PostgreSQL queue membership, progress, and failure records."""
+"""Queue projections and worker coordination over model_runs; no queue tables."""
 
 from uuid import uuid4
 
-import psycopg
 from psycopg.types.json import Jsonb
 
-from .catalog import PositionLibraryUnavailableError
 from .datasets import store
 from .run_repository import RunRepository
 
-ACTIVE = "('queued', 'running', 'stopping')"
 COUNTS = """
-    SELECT q.*,
+    SELECT queue_tag AS id,
+        min(config->'queue'->>'dataset_version') AS dataset_version,
+        min(config->'queue'->>'split') AS split,
+        min(harness) AS harness_id,
+        min(config->>'harness_name') AS harness_name,
+        min(config->>'harness_version') AS harness_version,
+        (jsonb_agg(config->'queue'->'model_selection')->0) AS model_selection,
+        min((config->'queue'->>'created_at')::timestamptz) AS created_at,
+        min(started_at) AS started_at, max(finished_at) AS finished_at,
+        bool_or(coalesce((config->'queue'->>'stop_requested')::boolean, false)) AS stop_requested,
         count(*)::int AS total,
-        count(*) FILTER (WHERE i.status = 'completed')::int AS completed,
-        count(*) FILTER (WHERE i.status = 'failed')::int AS failed,
-        count(*) FILTER (WHERE i.status = 'queued')::int AS pending,
-        count(*) FILTER (WHERE i.status = 'running')::int AS running,
-        count(*) FILTER (WHERE i.status = 'skipped')::int AS skipped
-    FROM position_run_queues q JOIN position_run_queue_items i ON i.queue_id = q.id
+        count(*) FILTER (WHERE status = 'completed')::int AS completed,
+        count(*) FILTER (WHERE status = 'failed')::int AS failed,
+        count(*) FILTER (WHERE status = 'queued')::int AS pending,
+        count(*) FILTER (WHERE status = 'running')::int AS running,
+        count(*) FILTER (WHERE status = 'skipped')::int AS skipped
+    FROM model_runs WHERE queue_tag IS NOT NULL
 """
 
 
@@ -30,98 +36,140 @@ class EmptyPositionSetError(ValueError):
     pass
 
 
+def queue_summary(row):
+    if row is None:
+        return None
+    stopping = row.pop("stop_requested")
+    if row["running"]:
+        row["status"] = "stopping" if stopping else "running"
+    elif row["pending"]:
+        row["status"] = "running" if row["started_at"] else "queued"
+    else:
+        row["status"] = "stopped" if stopping or row["skipped"] else "completed"
+    if row["running"] or row["pending"]:
+        row["finished_at"] = None
+    return row
+
+
+def lock_state(conn):
+    # Enqueue, claim and stop share this lock so two batches cannot start together.
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ':position-queue-state', 0))"
+    )
+
+
 class QueueRepository(RunRepository):
     def enqueue(self, *, dataset_version, split, definition, model_selection):
-        queue_id = str(uuid4())
-        try:
-            with self.connection() as conn:
-                positions = conn.execute(
-                    "SELECT id FROM positions WHERE dataset_version = %s AND split = %s "
-                    "ORDER BY id",
-                    (dataset_version, split),
-                ).fetchall()
-                if not positions:
-                    raise EmptyPositionSetError(
-                        "This dataset has no positions in that set."
-                    )
-                conn.execute(
-                    "INSERT INTO position_run_queues "
-                    "(id, dataset_version, split, harness_id, harness_name, harness_version, "
-                    "model_selection, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'queued')",
-                    (
-                        queue_id,
-                        dataset_version,
-                        split,
-                        definition.id,
-                        definition.name,
-                        definition.version,
-                        Jsonb(model_selection.model_dump(mode="json")),
-                    ),
-                )
-                with conn.cursor() as cursor:
-                    cursor.executemany(
-                        "INSERT INTO position_run_queue_items "
-                        "(queue_id, ordinal, position_id, status) VALUES (%s,%s,%s,'queued')",
-                        [
-                            (queue_id, ordinal, row["id"])
-                            for ordinal, row in enumerate(positions, 1)
-                        ],
-                    )
-        except PositionLibraryUnavailableError as exc:
-            if isinstance(exc.__cause__, psycopg.errors.UniqueViolation):
+        queue_tag = uuid4()
+        with self.connection() as conn:
+            lock_state(conn)
+            if conn.execute(
+                "SELECT 1 FROM model_runs WHERE queue_tag IS NOT NULL "
+                "AND status IN ('queued', 'running') LIMIT 1"
+            ).fetchone():
                 raise QueueConflictError(
                     "A queue is already active. Wait for it to finish or stop it first."
-                ) from exc
-            raise
-        return self.get_queue(queue_id)
+                )
+            positions = conn.execute(
+                "SELECT id FROM positions WHERE dataset_version = %s AND split = %s ORDER BY id",
+                (dataset_version, split),
+            ).fetchall()
+            if not positions:
+                raise EmptyPositionSetError(
+                    "This dataset has no positions in that set."
+                )
+            created_at = conn.execute("SELECT now() AS value").fetchone()["value"]
+            config = {
+                "harness_name": definition.name,
+                "harness_version": definition.version,
+                "queue": {
+                    "dataset_version": dataset_version,
+                    "split": split,
+                    "model_selection": model_selection.model_dump(mode="json"),
+                    "created_at": created_at.isoformat(),
+                    "stop_requested": False,
+                },
+            }
+            with conn.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO model_runs "
+                    "(id, position_id, queue_tag, model, harness, config, status) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,'queued')",
+                    [
+                        (
+                            uuid4(),
+                            row["id"],
+                            queue_tag,
+                            model_selection.model_id,
+                            definition.id,
+                            Jsonb({**config, "queue_ordinal": ordinal}),
+                        )
+                        for ordinal, row in enumerate(positions, 1)
+                    ],
+                )
+        return self.get_queue(queue_tag)
 
     def list_queues(self, limit=20):
         with self.connection() as conn:
-            return conn.execute(
+            rows = conn.execute(
                 COUNTS
-                + " GROUP BY q.id ORDER BY q.created_at DESC, q.id DESC LIMIT %s",
+                + " GROUP BY queue_tag ORDER BY created_at DESC, id DESC LIMIT %s",
                 (limit,),
             ).fetchall()
+        return [queue_summary(row) for row in rows]
 
-    def get_queue(self, queue_id):
+    def get_queue(self, queue_tag):
         with self.connection() as conn:
-            row = conn.execute(
-                COUNTS + " WHERE q.id = %s GROUP BY q.id", (queue_id,)
-            ).fetchone()
+            row = queue_summary(
+                conn.execute(
+                    COUNTS + " AND queue_tag = %s GROUP BY queue_tag", (queue_tag,)
+                ).fetchone()
+            )
             if row is None:
                 return None
             items = conn.execute(
-                "SELECT i.*, p.phase, p.position_type, r.final_move_uci, r.classification "
-                "FROM position_run_queue_items i JOIN positions p ON p.id = i.position_id "
-                "LEFT JOIN model_runs r ON r.id = i.run_id "
-                "WHERE i.queue_id = %s ORDER BY i.ordinal",
-                (queue_id,),
+                "SELECT r.queue_tag, (r.config->>'queue_ordinal')::int AS ordinal, "
+                "r.position_id, r.id AS run_id, r.status, r.failure_stage, r.error, "
+                "r.started_at, r.finished_at, p.phase, p.position_type, "
+                "r.final_move_uci, r.classification "
+                "FROM model_runs r JOIN positions p ON p.id = r.position_id "
+                "WHERE r.queue_tag = %s ORDER BY ordinal",
+                (queue_tag,),
             ).fetchall()
         return {**row, "items": items}
 
-    def stop(self, queue_id):
+    def stop(self, queue_tag):
         with self.connection() as conn:
-            conn.execute(
-                "UPDATE position_run_queues SET status = 'stopping' "
-                f"WHERE id = %s AND status IN {ACTIVE}",
-                (queue_id,),
-            )
-        return self.get_queue(queue_id)
+            lock_state(conn)
+            if conn.execute(
+                "SELECT 1 FROM model_runs WHERE queue_tag = %s "
+                "AND status IN ('queued', 'running') LIMIT 1",
+                (queue_tag,),
+            ).fetchone():
+                conn.execute(
+                    "UPDATE model_runs SET config = jsonb_set(config, "
+                    "'{queue,stop_requested}', 'true'::jsonb) WHERE queue_tag = %s",
+                    (queue_tag,),
+                )
+                conn.execute(
+                    "UPDATE model_runs SET status = 'skipped', finished_at = now() "
+                    "WHERE queue_tag = %s AND status = 'queued'",
+                    (queue_tag,),
+                )
+        return self.get_queue(queue_tag)
 
     def acquire_worker(self):
-        # A session lock prevents two Uvicorn processes from consuming the same
-        # queue. Schema-scoped keys also keep integration tests fully isolated.
+        # Session lock ensures one consumer; schema scoping isolates integration tests.
         with self.connection():
             pass
         conn = store.connect()
         try:
             conn.commit()
             conn.autocommit = True
-            acquired = conn.execute(
+            if conn.execute(
                 "SELECT pg_try_advisory_lock("
                 "hashtextextended(current_schema() || ':position-queue', 0)) AS acquired"
-            ).fetchone()["acquired"]
-            if acquired:
+            ).fetchone()["acquired"]:
                 return conn
         except BaseException:
             conn.close()
@@ -130,112 +178,66 @@ class QueueRepository(RunRepository):
         return None
 
     def recover(self):
-        """Only the worker holding the session lock may recover interrupted items."""
+        """Only the worker holding the session lock recovers interrupted attempts."""
         with self.connection() as conn:
             rows = conn.execute(
-                "SELECT i.*, r.status AS run_status, r.evaluation FROM "
-                "position_run_queue_items i LEFT JOIN model_runs r ON r.id = i.run_id "
-                "WHERE i.status = 'running'"
+                "UPDATE model_runs SET "
+                "status = CASE WHEN evaluation->>'status' = 'completed' THEN 'completed' ELSE 'failed' END, "
+                "failure_stage = CASE WHEN evaluation->>'status' = 'completed' THEN NULL ELSE 'interrupted' END, "
+                "error = CASE WHEN evaluation->>'status' = 'completed' THEN NULL "
+                "ELSE 'Worker interrupted before this position finished.' END, "
+                "finished_at = coalesce(finished_at, now()) "
+                "WHERE queue_tag IS NOT NULL AND status = 'running' RETURNING id, status, error"
             ).fetchall()
             for row in rows:
-                evaluation = row["evaluation"] or {}
-                complete = (
-                    row["run_status"] == "completed"
-                    and evaluation.get("status") == "completed"
-                )
-                error = (
-                    None
-                    if complete
-                    else "Worker interrupted before this position finished."
-                )
-                if row["run_status"] == "running":
-                    conn.execute(
-                        "UPDATE model_runs SET status = 'failed', error = %s, finished_at = now() "
-                        "WHERE id = %s",
-                        (error, row["run_id"]),
-                    )
+                if row["status"] == "failed":
                     conn.execute(
                         "UPDATE model_run_passes SET status = 'failed', error = %s, finished_at = now() "
                         "WHERE run_id = %s AND status = 'running'",
-                        (error, row["run_id"]),
+                        (row["error"], row["id"]),
                     )
-                conn.execute(
-                    "UPDATE position_run_queue_items SET status = %s, failure_stage = %s, "
-                    "error = %s, finished_at = now() WHERE queue_id = %s AND ordinal = %s",
-                    (
-                        "completed" if complete else "failed",
-                        None if complete else "interrupted",
-                        error,
-                        row["queue_id"],
-                        row["ordinal"],
-                    ),
-                )
 
     def claim_next(self):
         with self.connection() as conn:
-            queue = conn.execute(
-                f"SELECT * FROM position_run_queues WHERE status IN {ACTIVE} FOR UPDATE"
-            ).fetchone()
-            if queue is None:
+            lock_state(conn)
+            if conn.execute(
+                "SELECT 1 FROM model_runs WHERE queue_tag IS NOT NULL AND status = 'running' LIMIT 1"
+            ).fetchone():
                 return None
-            if queue["status"] == "stopping":
-                conn.execute(
-                    "UPDATE position_run_queue_items SET status = 'skipped', finished_at = now() "
-                    "WHERE queue_id = %s AND status = 'queued'",
-                    (queue["id"],),
-                )
             item = conn.execute(
-                "SELECT * FROM position_run_queue_items WHERE queue_id = %s "
-                "AND status = 'queued' ORDER BY ordinal LIMIT 1 FOR UPDATE",
-                (queue["id"],),
+                "SELECT id AS run_id, position_id, queue_tag, "
+                "(config->>'queue_ordinal')::int AS ordinal "
+                "FROM model_runs WHERE queue_tag IS NOT NULL AND status = 'queued' "
+                "ORDER BY created_at, ordinal, id LIMIT 1 FOR UPDATE"
             ).fetchone()
             if item is None:
-                conn.execute(
-                    "UPDATE position_run_queues SET status = %s, finished_at = now() WHERE id = %s",
-                    (
-                        "stopped" if queue["status"] == "stopping" else "completed",
-                        queue["id"],
-                    ),
-                )
                 return None
             conn.execute(
-                "UPDATE position_run_queues SET status = 'running', started_at = coalesce(started_at, now()) "
-                "WHERE id = %s",
-                (queue["id"],),
+                "UPDATE model_runs SET status = 'running', started_at = now() WHERE id = %s",
+                (item["run_id"],),
             )
-            conn.execute(
-                "UPDATE position_run_queue_items SET status = 'running', started_at = now() "
-                "WHERE queue_id = %s AND ordinal = %s",
-                (queue["id"], item["ordinal"]),
+            queue = queue_summary(
+                conn.execute(
+                    COUNTS + " AND queue_tag = %s GROUP BY queue_tag",
+                    (item["queue_tag"],),
+                ).fetchone()
             )
         return queue, item
 
-    def finish_item(self, queue_id, ordinal, *, error=None, failure_stage=None):
+    def finish_item(self, run_id, *, error=None, failure_stage=None):
         with self.connection() as conn:
-            if error:
-                # Also close a trace left open by a persistence failure outside
-                # the model call. Never overwrite a completed model/evaluation.
-                run = conn.execute(
-                    "UPDATE model_runs SET status = 'failed', error = %s, finished_at = now() "
-                    "WHERE status = 'running' AND id = (SELECT run_id FROM "
-                    "position_run_queue_items WHERE queue_id = %s AND ordinal = %s) RETURNING id",
-                    (error, queue_id, ordinal),
-                ).fetchone()
-                if run:
-                    conn.execute(
-                        "UPDATE model_run_passes SET status = 'failed', error = %s, finished_at = now() "
-                        "WHERE run_id = %s AND status = 'running'",
-                        (error, run["id"]),
-                    )
-            conn.execute(
-                "UPDATE position_run_queue_items SET status = %s, error = %s, "
-                "failure_stage = %s, finished_at = now() "
-                "WHERE queue_id = %s AND ordinal = %s AND status = 'running'",
-                (
-                    "failed" if error else "completed",
-                    error,
-                    failure_stage,
-                    queue_id,
-                    ordinal,
-                ),
-            )
+            row = conn.execute(
+                "UPDATE model_runs SET status = %s, error = %s, failure_stage = %s, "
+                "finished_at = coalesce(finished_at, now()) "
+                "WHERE id = %s AND queue_tag IS NOT NULL "
+                "AND status IN ('running', 'failed', 'completed') "
+                "AND NOT (status = 'completed' AND coalesce(evaluation->>'status', '') = 'completed') "
+                "RETURNING id",
+                ("failed" if error else "completed", error, failure_stage, run_id),
+            ).fetchone()
+            if row and error:
+                conn.execute(
+                    "UPDATE model_run_passes SET status = 'failed', error = %s, finished_at = now() "
+                    "WHERE run_id = %s AND status = 'running'",
+                    (error, run_id),
+                )

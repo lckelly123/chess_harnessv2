@@ -18,11 +18,11 @@ class RunRepository:
     @contextmanager
     def connection(self):
         try:
-            # Existing Docker volumes also receive the additive migration.
+            # Existing Docker volumes receive the transactional three-table upgrade.
             with self._schema_lock:
                 if not self._ready:
                     with store.connect() as conn:
-                        conn.execute(store.SCHEMA.read_text(encoding="utf-8"))
+                        store.ensure_schema(conn)
                     self._ready = True
             with store.connect() as conn:
                 yield conn
@@ -31,37 +31,40 @@ class RunRepository:
                 "Run history is unavailable. Check the positions database and retry."
             ) from exc
 
-    def create(self, run_id, position_id, model, harness, config, *, queue_item=None):
+    def create(self, run_id, position_id, model, harness, config):
         with self.connection() as conn:
             conn.execute(
-                "INSERT INTO model_runs (id, position_id, model, harness, config, status) "
-                "VALUES (%s, %s, %s, %s, %s, 'running')",
-                (run_id, position_id, model, harness, Jsonb(config)),
+                "INSERT INTO model_runs "
+                "(id, position_id, model, harness, config, status, started_at) "
+                "VALUES (%s, %s, %s, %s, %s, 'running', now())",
+                (
+                    run_id,
+                    position_id,
+                    model,
+                    harness,
+                    Jsonb(config),
+                ),
             )
-            if queue_item is not None:
-                linked = conn.execute(
-                    "UPDATE position_run_queue_items SET run_id = %s "
-                    "WHERE queue_id = %s AND ordinal = %s AND position_id = %s "
-                    "AND status = 'running' AND run_id IS NULL",
-                    (run_id, *queue_item, position_id),
-                )
-                if linked.rowcount != 1:
-                    raise ValueError("Queue item is no longer available for this run.")
 
     def configure(self, run_id, model, config):
         with self.connection() as conn:
             conn.execute(
-                "UPDATE model_runs SET model = %s, config = %s WHERE id = %s",
+                "UPDATE model_runs SET model = %s, config = config || %s WHERE id = %s",
                 (model, Jsonb(config), run_id),
             )
 
     def finish(self, run_id, *, move=None, error=None, grade=None):
         grade = grade or {}
+        failure_stage = "execution" if error else None
+        if grade.get("evaluation", {}).get("status") == "failed":
+            failure_stage = "evaluation"
+            error = error or grade["evaluation"].get("error") or "Evaluation failed."
         with self.connection() as conn:
             conn.execute(
                 "UPDATE model_runs SET status = %s, final_move_uci = %s, error = %s, "
                 "classification = %s, cp_loss = %s, expected_points_loss = %s, "
-                "better_moves = %s, evaluation = %s, finished_at = now() WHERE id = %s",
+                "better_moves = %s, evaluation = %s, failure_stage = %s, "
+                "finished_at = now() WHERE id = %s",
                 (
                     "failed" if error else "completed",
                     move,
@@ -71,6 +74,7 @@ class RunRepository:
                     grade.get("expected_points_loss"),
                     Jsonb(grade["better_moves"]) if "better_moves" in grade else None,
                     Jsonb(grade["evaluation"]) if "evaluation" in grade else None,
+                    failure_stage,
                     run_id,
                 ),
             )
@@ -100,7 +104,9 @@ class RunRepository:
                 values,
             )
 
-    def list(self, position_id=None, run_id=None, *, limit=30, offset=0):
+    def list(
+        self, position_id=None, run_id=None, *, queue_tag=None, limit=30, offset=0
+    ):
         clauses, args = [], []
         if position_id:
             clauses.append("position_id = %s")
@@ -108,6 +114,9 @@ class RunRepository:
         if run_id:
             clauses.append("id = %s")
             args.append(run_id)
+        if queue_tag:
+            clauses.append("queue_tag = %s")
+            args.append(queue_tag)
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with self.connection() as conn:
             total = conn.execute(
@@ -116,7 +125,7 @@ class RunRepository:
             items = conn.execute(
                 "SELECT * FROM model_runs"
                 + where
-                + " ORDER BY started_at DESC, id DESC LIMIT %s OFFSET %s",
+                + " ORDER BY created_at DESC, id DESC LIMIT %s OFFSET %s",
                 [*args, limit, offset],
             ).fetchall()
         return items, total

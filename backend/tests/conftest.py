@@ -46,6 +46,7 @@ class MemoryRunRepository:
         self.runs[run_id] = dict(
             id=run_id,
             position_id=position_id,
+            queue_tag=None,
             model=model,
             harness=harness,
             config=copy.deepcopy(config),
@@ -56,19 +57,27 @@ class MemoryRunRepository:
             expected_points_loss=None,
             better_moves=None,
             evaluation=None,
+            failure_stage=None,
             error=None,
+            created_at=datetime.now(UTC),
             started_at=datetime.now(UTC),
             finished_at=None,
         )
 
     def configure(self, run_id, model, config):
-        self.runs[run_id].update(model=model, config=copy.deepcopy(config))
+        self.runs[run_id]["model"] = model
+        self.runs[run_id]["config"].update(copy.deepcopy(config))
 
     def finish(self, run_id, *, move=None, error=None, grade=None):
+        failure_stage = "execution" if error else None
+        if (grade or {}).get("evaluation", {}).get("status") == "failed":
+            failure_stage = "evaluation"
+            error = error or grade["evaluation"].get("error") or "Evaluation failed."
         self.runs[run_id].update(
             status="failed" if error else "completed",
             final_move_uci=move,
             error=error,
+            failure_stage=failure_stage,
             finished_at=datetime.now(UTC),
             **(grade or {}),
         )
@@ -79,12 +88,15 @@ class MemoryRunRepository:
     def save_pass(self, row):
         self.passes[(row["run_id"], row["pass_number"])] = copy.deepcopy(row)
 
-    def list(self, position_id=None, run_id=None, *, limit=30, offset=0):
+    def list(
+        self, position_id=None, run_id=None, *, queue_tag=None, limit=30, offset=0
+    ):
         rows = [
             r
             for r in self.runs.values()
             if (not position_id or r["position_id"] == str(position_id))
             and (not run_id or r["id"] == str(run_id))
+            and (not queue_tag or r["queue_tag"] == str(queue_tag))
         ]
         rows.sort(key=lambda r: r["started_at"], reverse=True)
         return copy.deepcopy(rows[offset : offset + limit]), len(rows)

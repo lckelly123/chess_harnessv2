@@ -145,18 +145,21 @@ export interface PositionalTestRun {
 export interface ModelRun {
   id: string;
   positionId: string;
+  queueTag: string | null;
   model: string;
   harness: string;
   config: Record<string, unknown>;
-  status: "running" | "completed" | "failed";
+  status: "queued" | "running" | "completed" | "failed" | "skipped";
   finalMoveUci: string | null;
   cpLoss: number | null;
   classification: string | null;
   expectedPointsLoss: number | null;
   betterMoves: Record<string, unknown>[] | null;
   evaluation: Record<string, unknown> | null;
+  failureStage: string | null;
   error: string | null;
-  startedAt: string;
+  createdAt: string;
+  startedAt: string | null;
   finishedAt: string | null;
 }
 
@@ -177,7 +180,7 @@ export interface ModelRunPass {
   phase: string;
   toolCalls: PassToolCall[];
   workingNotes: string | null;
-  status: ModelRun["status"];
+  status: "running" | "completed" | "failed";
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
@@ -185,7 +188,7 @@ export interface ModelRunPass {
 
 export interface ModelRunDetail extends ModelRun { passes: ModelRunPass[] }
 export interface ModelRunList { items: ModelRun[]; total: number }
-export interface ModelRunFilters { positionId?: string; runId?: string; offset?: number }
+export interface ModelRunFilters { positionId?: string; runId?: string; queueTag?: string; offset?: number }
 
 export interface StartMatchInput {
   whiteHarnessId: string;
@@ -222,7 +225,7 @@ export interface PositionQueueSummary {
 }
 
 export interface PositionQueueItem {
-  queueId: string;
+  queueTag: string;
   ordinal: number;
   positionId: string;
   runId: string | null;
@@ -242,9 +245,9 @@ export interface PositionQueueList { items: PositionQueueSummary[] }
 
 export interface MatchApi {
   listPositionQueues(): Promise<PositionQueueList>;
-  getPositionQueue(queueId: string): Promise<PositionQueueDetail>;
+  getPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   createPositionQueue(input: CreatePositionQueueInput): Promise<PositionQueueDetail>;
-  stopPositionQueue(queueId: string): Promise<PositionQueueDetail>;
+  stopPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   listHarnesses(): Promise<HarnessVersion[]>;
   listFolders(): Promise<GameFolderList>;
   createFolder(name: string): Promise<GameFolder>;

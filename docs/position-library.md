@@ -46,7 +46,7 @@ docker compose run --rm --no-deps backend python -m positional_testing.datasets 
 ```
 
 Wait for `positions_db` to be healthy before importing. The importer also applies
-the additive schema, so it works with an existing database volume. Validation
+the schema and transactional three-table migration, so it works with an existing database volume. Validation
 happens before any data write; all inserts then occur in one transaction. A
 second import compares the stored rows and references with the frozen seed and reports
 `already_present`. A changed manifest for an existing version is rejected.
@@ -67,6 +67,7 @@ be backed up independently with PostgreSQL's normal backup tools.
 ## Run history
 
 `model_runs` stores one UUID per positional attempt, its position foreign key,
+nullable `queue_tag` UUID for full-set batches (no queue foreign key),
 resolved model, harness, non-secret execution configuration, status, chosen UCI
 move, timestamps, and failure message. New completed turns populate `cp_loss`,
 `classification`, `expected_points_loss`, `better_moves`, and `evaluation`.
@@ -80,20 +81,24 @@ rolled-back results and unexecuted calls; proposed notes from failed passes rema
 available for diagnosis. Missing notes are left empty, never inferred. Provider
 credentials, raw response envelopes and encrypted reasoning are not persisted.
 
-The recorder creates the run before resolving the model, inserts a pass before
-calling it, and updates that same pass row as calls return. Ordinary failures and
-cancellations retain partial history. A hard process kill may leave an attempt
-marked running; automatic recovery of those records is not implemented yet.
+A full queue creates its scheduled run rows before execution; standalone runs are
+created before model resolution. The recorder inserts a pass before calling the
+model and updates it as tools return. Failures retain partial history. Restart
+recovery marks interrupted queued attempts failed and continues unstarted rows;
+standalone attempts are outside queue recovery.
 Recording is scoped to positional turns, and leaves match tracing unchanged.
 
 Open **Run history** below the position controls. The position filter follows the
-selected exercise; exact Position ID and Run ID filters combine, and **All runs**
-clears both. Results are paginated in groups of 30. Selecting a run shows its move
+selected exercise; exact Position ID, Run ID, and Queue tag filters combine,
+and **All runs** clears all three. A queued attempt shows its full queue UUID above
+the outcome; **View queue runs** clears position/run filters and shows that batch
+across all positions. List rows show a shortened queue tag with the full UUID in
+its tooltip. Results are paginated in groups of 30. Selecting a run shows its move
 and evaluation state above a bounded, keyboard-scrollable pass timeline. Expand
 individual calls to inspect arguments, results and board context. Running records
 refresh every two seconds. History survives page reloads; earlier transient runs
-are not backfilled. The run repository applies the additive schema on first use
-so existing Docker volumes receive these tables without reimporting the library.
+are not recreated. The run repository applies the transactional schema migration
+on first use, preserving existing IDs, moves, grades, notes, and tool calls.
 
 ## Automatic run evaluation
 
@@ -182,9 +187,11 @@ WHERE p.split = 'train' AND r.status = 'completed'
 | `fen` | Full six-field FEN, **after** the last opponent move |
 | `pgn_prefix` | Legal game history ending exactly at that FEN |
 | `last_move_uci`, `last_move_san` | Last opponent move in machine/display notation |
-| `source`, `source_game_id`, `source_ply`, `source_url` | Origin and exact location |
-| `position_key` | Hash of board, turn, castling, and legal en-passant rights |
-| `metadata` | Source ratings, puzzle themes, license, and curation method |
+| `metadata.provenance` | Source, source game ID, ply, URL, and board identity hash |
+| `metadata.dataset` | Frozen dataset manifest, content hash, description, seed, and import timestamp |
+| `metadata.reference_evaluations` | Reference engine analyses including their original timestamps |
+| Other `metadata` keys | Source ratings, puzzle themes, license, and curation method |
+| `created_at` | Position import timestamp |
 
 The PGN has result `*`, no player names, no comments/evaluations, no variations,
 and no future moves. Replaying it recreates castling, en passant, repetition
@@ -192,10 +199,11 @@ history, and the halfmove clock. **Do not apply `last_move_uci` again** after
 loading `fen`. Prefer replaying the prefix when constructing the harness position
 so repetition history survives.
 
-`position_datasets` records the immutable manifest and content hash.
-`position_evaluations` stores Stockfish reference scores and candidate lines
-separately, keyed by position and analysis ID. Scores use the **side-to-move at
-the root** perspective; mate distances are stored separately from centipawns.
+The database contains exactly `positions`, `model_runs`, and `model_run_passes`.
+Dataset manifests live under `positions.metadata.dataset`; reference scores and
+candidate lines live in `positions.metadata.reference_evaluations`, identified
+by analysis ID. Scores use the **side-to-move at the root** perspective; mate
+distances are stored separately from centipawns.
 The payload preserves engine options, search budget, depth, candidate moves, and
 screening evidence. Further analyses can use another `analysis_id`.
 
@@ -221,32 +229,41 @@ ORDER BY id;
 
 ## Full-set queues
 
-`position_run_queues` stores each batch's dataset version, training/test split,
-versioned harness identity, model selection, status, and timestamps.
-`position_run_queue_items` freezes its position IDs in deterministic UUID order,
-with an ordinal, status, optional `run_id`, failure stage/message, and timestamps.
-The linked `model_runs` and `model_run_passes` remain the trace/evaluation store;
-run configuration also includes `queue_id` and `queue_ordinal`.
+A full queue inserts one `model_runs` row per selected position with `status = queued`,
+NULL `started_at`, and one shared random `queue_tag` UUID. Every batch gets a fresh
+tag. The rows keep their IDs when they execute. Standalone attempts have NULL
+`queue_tag`. There are no separate queue or queue-item tables.
 
-A server worker executes one position, including grading, before claiming the
-next. A partial unique index permits only one active queue, and a PostgreSQL
-session advisory lock permits only one worker across API processes. Model,
-position-validation, grading, and timeout failures are saved on the item and do
-not prevent later positions from running. Grading failures preserve completed
-model traces; move classifications such as `blunder` are successful executions.
-`completed` on a queue means all its positions were attempted, so inspect its
-failed count as well. Failures are not retried automatically.
+Each run's `config.queue` captures the dataset version, split, requested model,
+batch creation time, and stop request; `config.queue_ordinal` freezes its order.
+Harness identity and runtime settings remain on the run. Queue HTTP endpoints
+are projections grouped by tag: progress, outcome counts, and queue status come
+from these run rows. History can filter by tag across all positions.
 
-The browser only starts/stops and polls the queue. Closing it does not stop work.
-`Stop after current` changes the queue to `stopping`; the active position finishes,
-remaining items become `skipped`, and the queue becomes `stopped`. After a backend
-restart, a finished grade is retained if it was saved just before interruption.
-Otherwise the interrupted item/unfinished trace is marked failed, and remaining
-positions continue. Existing unqueued traces are never modified by recovery.
-Database outages pause consumption until persistence returns.
+A schema-scoped transaction advisory lock serializes enqueue/claim/stop and
+prevents overlapping active batches. A separate session advisory lock allows
+one worker across API processes. Each position and its grading finish before
+the next begins. Execution, validation, timeout, and evaluation failures set
+`status = failed`, `failure_stage`, and `error` on the same run. Evaluation failures
+retain the move and completed model passes. A `blunder` grade is a successful
+execution. A completed batch may therefore contain failed runs.
+
+Stop immediately marks unstarted rows `skipped` and lets a currently running row
+finish. The projection reports `stopping` while it finishes, then `stopped`. Restart
+retains a durably saved grade, flags interrupted attempts, and continues pending
+rows without replaying paid calls. Unqueued traces are outside this recovery.
+Closing the browser does not stop the worker; database outages pause consumption.
+
+The migration embeds former dataset/reference records in position metadata and
+archives original queue records in `config.queue_legacy`. Existing run IDs and pass
+contents are retained, including failed attempts. Pending/skipped legacy queue
+items become scheduled run rows. Existing evaluation failures are normalized to
+`status = failed` and `failure_stage = evaluation` without recalculating grades.
+The four superseded tables are removed transactionally, without CASCADE; an
+unexpected dependency rolls back the upgrade. Back up the volume before upgrading.
 
 `POSITION_QUEUE_ITEM_TIMEOUT_SECONDS` defaults to 1800 seconds for the entire
-model turn plus grading. A timed-out position is flagged and the next begins.
+model turn plus grading. A timed-out run is flagged and the next begins.
 The existing 180-second Stockfish timeout still applies within that limit.
 The Docker backend must remain running for progress; its restart resumes pending
 work automatically. Changing the UI's model or harness cannot change a queue's
