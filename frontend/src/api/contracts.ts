@@ -146,6 +146,7 @@ export interface ModelRun {
   id: string;
   positionId: string;
   queueTag: string | null;
+  queueName?: string | null;
   model: string;
   harness: string;
   config: Record<string, unknown>;
@@ -161,6 +162,12 @@ export interface ModelRun {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  positionFen?: string | null;
+  datasetVersion?: string | null;
+  split?: "train" | "test" | null;
+  phase?: string | null;
+  positionType?: string | null;
+  analysisStatus?: "completed" | "failed" | "missing";
 }
 
 export interface PassToolCall {
@@ -184,11 +191,36 @@ export interface ModelRunPass {
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
+  hasModelExchange?: boolean;
 }
+
+export interface ModelPassExchange { input: string; output: string[] }
 
 export interface ModelRunDetail extends ModelRun { passes: ModelRunPass[] }
 export interface ModelRunList { items: ModelRun[]; total: number }
-export interface ModelRunFilters { positionId?: string; runId?: string; queueTag?: string; offset?: number }
+export interface ModelRunFilters {
+  positionId?: string;
+  runId?: string;
+  queueTag?: string;
+  offset?: number;
+  query?: string;
+  split?: string;
+  datasetVersion?: string;
+  harness?: string;
+  model?: string;
+  status?: string;
+  analysis?: string;
+  classification?: string;
+  runSource?: string;
+  sort?: "newest" | "oldest";
+}
+
+export interface ModelRunFilterOptions {
+  datasets: string[];
+  models: string[];
+  harnesses: { id: string; name: string }[];
+  queues: { id: string; name?: string | null; datasetVersion: string; split: "train" | "test"; harnessName: string; createdAt: string }[];
+}
 
 export interface StartMatchInput {
   whiteHarnessId: string;
@@ -198,6 +230,7 @@ export interface StartMatchInput {
 }
 
 export interface CreatePositionQueueInput {
+  name?: string;
   split: "train" | "test";
   datasetVersion: string;
   harnessId: string;
@@ -206,6 +239,7 @@ export interface CreatePositionQueueInput {
 
 export interface PositionQueueSummary {
   id: string;
+  name?: string | null;
   datasetVersion: string;
   split: "train" | "test";
   harnessId: string;
@@ -248,6 +282,7 @@ export interface MatchApi {
   getPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   createPositionQueue(input: CreatePositionQueueInput): Promise<PositionQueueDetail>;
   stopPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
+  deletePositionQueue(queueTag: string): Promise<void>;
   listHarnesses(): Promise<HarnessVersion[]>;
   listFolders(): Promise<GameFolderList>;
   createFolder(name: string): Promise<GameFolder>;
@@ -255,9 +290,13 @@ export interface MatchApi {
   getMatch(matchId: string): Promise<MatchDetail>;
   startMatch(input: StartMatchInput): Promise<MatchDetail>;
   stopMatch(matchId: string): Promise<MatchDetail>;
+  deleteMatch(matchId: string): Promise<void>;
   assignMatchFolder(matchId: string, folderId: string | null): Promise<MatchDetail>;
   listPositionalTestPositions(): Promise<PositionalTestPositionList>;
   runPositionalTest(input: RunPositionalTestInput): Promise<PositionalTestRun>;
   listModelRuns(filters?: ModelRunFilters): Promise<ModelRunList>;
+  getModelRunFilters(): Promise<ModelRunFilterOptions>;
   getModelRun(runId: string): Promise<ModelRunDetail>;
+  deleteModelRun(runId: string): Promise<void>;
+  getModelPassExchange(runId: string, passNumber: number): Promise<ModelPassExchange>;
 }

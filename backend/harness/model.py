@@ -19,6 +19,7 @@ from openai import (
 )
 
 from harness.contracts import HarnessError
+from harness.recording import current_recorder
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,19 +152,25 @@ class _ResponsesModel:
             )
             if self.provider == "openai":
                 options["include"] = ["reasoning.encrypted_content"]
+        # This is the actual provider request, excluding tracing/transport metadata.
+        request_body = dict(
+            model=model,
+            input=[
+                {"role": "developer", "content": instructions},
+                *history,
+                {"role": "user", "content": dynamic_input},
+            ],
+            reasoning={"effort": reasoning_effort},
+            max_output_tokens=max_output_tokens,
+            store=False,
+            **options,
+        )
+        recorder = current_recorder.get()
+        if recorder is not None:
+            await asyncio.to_thread(recorder.capture_input, request_body)
         try:
             response = await self.client.responses.create(
-                model=model,
-                input=[
-                    {"role": "developer", "content": instructions},
-                    *history,
-                    {"role": "user", "content": dynamic_input},
-                ],
-                reasoning={"effort": reasoning_effort},
-                max_output_tokens=max_output_tokens,
-                store=False,
-                # History is scoped to a harness turn, never a shared client.
-                **options,
+                **request_body,
                 langsmith_extra={
                     "name": f"{self.label} forced tool retry"
                     if forced_retry
@@ -196,6 +203,9 @@ class _ResponsesModel:
             ) from exc
         # Preserve API field names and omit SDK defaults when replaying output.
         payload = response.to_dict(mode="json")
+        # Preserve even failed/incomplete/malformed model responses before validation.
+        if recorder is not None:
+            await asyncio.to_thread(recorder.capture_output, payload)
         if payload.get("status") in {"failed", "cancelled"}:
             raise HarnessError(f"{self.label} response status: {payload['status']}.")
         return payload

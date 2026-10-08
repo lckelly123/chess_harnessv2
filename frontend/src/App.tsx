@@ -9,6 +9,7 @@ import { MatchDocket } from "./components/MatchDocket";
 import { MatchStatus } from "./components/MatchStatus";
 import { ModelSelector } from "./components/ModelSelector";
 import { PositionalTesting } from "./components/PositionalTesting";
+import { PositionalRunLibrary } from "./components/PositionalRunLibrary";
 import { ReplayControls } from "./components/ReplayControls";
 import { TracePanel } from "./components/TracePanel";
 
@@ -32,6 +33,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<DeskMode>("live");
   const [workspaceSection, setWorkspaceSection] = useState<WorkspaceSection>("matches");
+  const [libraryType, setLibraryType] = useState<"matches" | "positions">("matches");
   const [setupOpen, setSetupOpen] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [modelSelection, setModelSelection] = useState<ModelSelection>({
@@ -143,6 +145,11 @@ export default function App() {
 
   const navigateWorkspace = (section: WorkspaceSection) => {
     setWorkspaceSection(section);
+    if (section === "records") {
+      void Promise.all([refreshMatches(query, folderFilter), refreshFolders()]).catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : "Could not refresh match records.");
+      });
+    }
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "instant" });
       headingRef.current?.focus({ preventScroll: true });
@@ -249,6 +256,20 @@ export default function App() {
     }
   };
 
+  const deleteMatch = async (matchId: string) => {
+    await matchApi.deleteMatch(matchId);
+    setMatches((current) => current.filter((match) => match.id !== matchId));
+    setSelectedMatch((current) => current?.id === matchId ? null : current);
+    setActiveMatchId((current) => current === matchId ? null : current);
+    if (selectedMatch?.id === matchId) { setPlaying(false); setDisplayPly(0); }
+    setAssignmentError((current) => current?.matchId === matchId ? null : current);
+    try {
+      await Promise.all([refreshMatches(query, folderFilter), refreshFolders()]);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Match deleted, but library counts could not be refreshed. Reload to update them.");
+    }
+  };
+
   const emptyHistoryMessage = query.trim()
     ? "No records match this search in the selected folder. Try another player, version, or status."
     : folderFilter === "all"
@@ -272,7 +293,7 @@ export default function App() {
             <LayoutGrid size={18} aria-hidden="true" /><span>Match desk</span>
           </button>
           <button className={`workspace-nav__button ${workspaceSection === "records" ? "workspace-nav__button--active" : ""}`} type="button" aria-current={workspaceSection === "records" ? "page" : undefined} onClick={() => navigateWorkspace("records")}>
-            <Library size={18} aria-hidden="true" /><span>Match library</span><span className="nav-count">{allMatchCount}</span>
+            <Library size={18} aria-hidden="true" /><span>Match library</span>
           </button>
           <button className={`workspace-nav__button ${workspaceSection === "positional-testing" ? "workspace-nav__button--active" : ""}`} type="button" aria-current={workspaceSection === "positional-testing" ? "page" : undefined} onClick={() => navigateWorkspace("positional-testing")}>
             <FlaskConical size={18} aria-hidden="true" /><span>Positional testing</span>
@@ -297,7 +318,7 @@ export default function App() {
                 {showSetup ? "Match setup" : "New match"}
               </button>
             ) : workspaceSection === "records" ? (
-              <button className="button button--primary" type="button" onClick={() => { setSetupOpen(true); navigateWorkspace("matches"); }}><Plus size={17} aria-hidden="true" />New match</button>
+              <button className="button button--primary" type="button" onClick={() => { if (libraryType === "positions") navigateWorkspace("positional-testing"); else { setSetupOpen(true); navigateWorkspace("matches"); } }}><Plus size={17} aria-hidden="true" />{libraryType === "positions" ? "Run positional test" : "New match"}</button>
             ) : null}
           </header>
 
@@ -338,11 +359,18 @@ export default function App() {
           </div>
 
           <div hidden={workspaceSection !== "records"}>
+            <div className="library-switcher" role="group" aria-label="Library type">
+              <button type="button" aria-pressed={libraryType === "matches"} onClick={() => setLibraryType("matches")}><LayoutGrid size={18} aria-hidden="true" /><span><strong>Agent vs agent</strong><small>Match desk records</small></span></button>
+              <button type="button" aria-pressed={libraryType === "positions"} onClick={() => setLibraryType("positions")}><FlaskConical size={18} aria-hidden="true" /><span><strong>Positional testing</strong><small>Single runs and full queues</small></span></button>
+            </div>
+            <div hidden={libraryType !== "matches"}>
             {error ? <div className="error-banner" role="alert"><AlertTriangle size={18} aria-hidden="true" /><span>{error}</span></div> : null}
             <div className="records-workspace">
               <FolderRail folders={folders} totalMatches={allMatchCount} unfiledCount={unfiledCount} selectedId={folderFilter} creating={folderBusy} createError={folderError} onSelect={setFolderFilter} onCreate={createFolder} />
-              <HistoryList matches={matches} total={totalMatches} query={query} selectedId={selectedMatch?.id ?? null} loading={loading} folders={folders} assigningId={assigningMatchId} assignmentError={assignmentError} emptyMessage={emptyHistoryMessage} onQueryChange={setQuery} onOpen={openRecord} onAssignFolder={assignMatchFolder} />
+              <HistoryList matches={matches} total={totalMatches} query={query} selectedId={selectedMatch?.id ?? null} loading={loading} folders={folders} assigningId={assigningMatchId} assignmentError={assignmentError} emptyMessage={emptyHistoryMessage} onQueryChange={setQuery} onOpen={openRecord} onAssignFolder={assignMatchFolder} onDelete={deleteMatch} />
             </div>
+            </div>
+            <div hidden={libraryType !== "positions"}><PositionalRunLibrary active={workspaceSection === "records" && libraryType === "positions"} /></div>
           </div>
           <div hidden={workspaceSection !== "positional-testing"}>
             <PositionalTesting modelSelection={modelSelection} running={positionalRunning} onRunningChange={setPositionalRunning} />

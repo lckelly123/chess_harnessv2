@@ -6,7 +6,9 @@ import type {
   MatchDetail,
   MatchList,
   ModelRunList,
+  ModelRunFilterOptions,
   ModelRunDetail,
+  ModelPassExchange,
   PositionQueueDetail,
   PositionQueueList,
   PositionalTestPositionList,
@@ -36,7 +38,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(payload?.detail ?? `Request failed with status ${response.status}.`, response.status);
   }
 
-  return (await response.json()) as T;
+  return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
 export const matchApi: MatchApi = {
@@ -44,6 +46,7 @@ export const matchApi: MatchApi = {
   getPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}`),
   createPositionQueue: (input) => request<PositionQueueDetail>("/api/positional-testing/queues", { method: "POST", body: JSON.stringify(input) }),
   stopPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}/stop`, { method: "POST" }),
+  deletePositionQueue: (id) => request<void>(`/api/positional-testing/queues/${encodeURIComponent(id)}`, { method: "DELETE" }),
   listHarnesses: () => request<HarnessVersion[]>("/api/harnesses"),
   listFolders: () => request<GameFolderList>("/api/folders"),
   createFolder: (name) =>
@@ -58,6 +61,7 @@ export const matchApi: MatchApi = {
     return request<MatchList>(`/api/matches?${parameters.toString()}`);
   },
   getMatch: (matchId) => request<MatchDetail>(`/api/matches/${encodeURIComponent(matchId)}`),
+  deleteMatch: (matchId) => request<void>(`/api/matches/${encodeURIComponent(matchId)}`, { method: "DELETE" }),
   startMatch: (input: StartMatchInput) =>
     request<MatchDetail>("/api/matches", {
       method: "POST",
@@ -77,9 +81,20 @@ export const matchApi: MatchApi = {
     if (filters.positionId) parameters.set("position_id", filters.positionId);
     if (filters.runId) parameters.set("run_id", filters.runId);
     if (filters.queueTag) parameters.set("queue_tag", filters.queueTag);
+    for (const [key, value] of Object.entries({
+      query: filters.query, split: filters.split, dataset_version: filters.datasetVersion,
+      harness: filters.harness, model: filters.model, status: filters.status,
+      analysis: filters.analysis, classification: filters.classification,
+      run_source: filters.runSource, sort: filters.sort,
+    })) {
+      if (value) parameters.set(key, value);
+    }
     return request<ModelRunList>(`/api/positional-testing/runs?${parameters}`);
   },
+  getModelRunFilters: () => request<ModelRunFilterOptions>("/api/positional-testing/run-filters"),
   getModelRun: (runId) => request<ModelRunDetail>(`/api/positional-testing/runs/${encodeURIComponent(runId)}`),
+  deleteModelRun: (runId) => request<void>(`/api/positional-testing/runs/${encodeURIComponent(runId)}`, { method: "DELETE" }),
+  getModelPassExchange: (runId, passNumber) => request<ModelPassExchange>(`/api/positional-testing/runs/${encodeURIComponent(runId)}/passes/${passNumber}/exchange`),
   runPositionalTest: (input: RunPositionalTestInput) =>
     request<PositionalTestRun>("/api/positional-testing/runs", {
       method: "POST",

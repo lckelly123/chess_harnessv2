@@ -18,6 +18,7 @@ The first release is a React web interface served locally through Docker. It let
 - search previous matches;
 - create named game folders and file new or existing matches into them;
 - open and replay a completed match move by move;
+- browse Match library by Agent vs agent or Positional testing; order match records chronologically and filter saved positional attempts by queue, set, engine analysis/grade, dataset, harness, model, and status, with the saved board and trace beside the selected attempt;
 - filter the PostgreSQL position library by set, phase, type, side, dataset, source, theme, and puzzle rating; choose a harness and request one proposed move;
 - run every position in a dataset's training or test set sequentially, monitor progress, and inspect saved results and failed attempts.
 
@@ -32,7 +33,9 @@ run in the background.
 - The frontend never chooses chess moves and exposes no human move controls.
 - Public UI events summarize match progress; detailed graph execution remains in LangSmith.
 - Positional-test attempts and per-pass working notes/tool results persist in PostgreSQL. They do not create a match record or mutate the saved PGN. Successful Stockfish evaluations record an expected-points-loss classification and all strictly better legal moves for future training. Grading failures retain the model trace and error; existing runs are not backfilled.
+- New positional passes also persist the actual provider request and raw response before validation. Expand leaves the pass summary intact and opens a Markdown reading view of Input and Output with a sticky Back arrow. Back, browser Back, or Escape returns to the same pass with its selection, filters, scroll, and focus preserved. Presentation does not change the saved exchange. Historical passes without captured input/output cannot be expanded.
 - Full-set queues capture their dataset, split, harness, model selection, and position membership when created, regardless of library filters. One queue runs at a time, completing each model turn and evaluation before the next position. Execution, validation, evaluation, and timeout failures are flagged in PostgreSQL and the queue continues. Closing the browser does not stop it; a backend restart resumes pending positions without replaying interrupted attempts.
+- Training and test queues can have an optional name for organization. Names appear in queue progress, recent queues, run history, and Match Library filters/search; the queue UUID remains its identity, including when names are reused.
 - The first release stays deliberately small: no authentication, tournaments, agent configuration editor, or trace mutation.
 - Harness selections are versioned identifiers, not editable prompts.
 - Stopping a match ends the active local match. Stopping a queue lets the current position finish and marks the remaining positions skipped; saved results remain available.

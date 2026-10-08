@@ -2,13 +2,17 @@
 
 import os
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
 from harness.model import ModelResolutionError
 
 from .matches.catalog import UnknownHarnessError
 from .matches.manager import MatchConflictError, MatchManager
-from .matches.repository import FolderNameConflictError, UnknownFolderError
+from .matches.repository import (
+    FolderNameConflictError,
+    MatchDeletionConflictError,
+    UnknownFolderError,
+)
 from .models import (
     AssignGameFolderRequest,
     CreateGameFolderRequest,
@@ -152,3 +156,14 @@ async def stop_match(match_id: str, request: Request) -> MatchDetail:
             status_code=status.HTTP_404_NOT_FOUND, detail="Match not found"
         )
     return match
+
+
+@router.delete("/matches/{match_id}", status_code=204)
+def delete_match(match_id: str, request: Request) -> Response:
+    try:
+        deleted = _manager(request).repository.delete_match(match_id)
+    except MatchDeletionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Match not found")
+    return Response(status_code=204)

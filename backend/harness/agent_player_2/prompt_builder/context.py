@@ -82,6 +82,9 @@ class BoardStateContext:
     agent_piece_groups: tuple[PieceGroup, ...]
     opponent_piece_groups: tuple[PieceGroup, ...]
     side_to_move_piece_groups: tuple[PieceGroup, ...]
+    hypothetical_side_to_move: str
+    hypothetical_piece_groups: tuple[PieceGroup, ...]
+    hypothetical_unavailable_reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +196,24 @@ def _legal_move_sort_key(
     )
 
 
+def _group_legal_moves(
+    board: chess.Board, moves: tuple[MoveIdentity, ...]
+) -> dict[str, tuple[str, ...]]:
+    moves_by_square: dict[str, list[MoveIdentity]] = {}
+    for move in moves:
+        moves_by_square.setdefault(move.from_square, []).append(move)
+    return {
+        square: tuple(
+            move.san
+            for move in sorted(
+                square_moves,
+                key=lambda candidate: _legal_move_sort_key(board, candidate),
+            )
+        )
+        for square, square_moves in moves_by_square.items()
+    }
+
+
 def _piece_groups(
     board: chess.Board,
     color: chess.Color,
@@ -259,19 +280,7 @@ def build_board_state_context(
     ):
         raise ValueError("Canonical legal moves do not match graph state.")
 
-    moves_by_square: dict[str, list[MoveIdentity]] = {}
-    for move in moves:
-        moves_by_square.setdefault(move.from_square, []).append(move)
-    grouped_moves = {
-        square: tuple(
-            move.san
-            for move in sorted(
-                square_moves,
-                key=lambda candidate: _legal_move_sort_key(board, candidate),
-            )
-        )
-        for square, square_moves in moves_by_square.items()
-    }
+    grouped_moves = _group_legal_moves(board, moves)
     agent_to_move = board.turn == agent_color
     agent_side = "White" if agent_color == chess.WHITE else "Black"
     opponent_side = "Black" if agent_color == chess.WHITE else "White"
@@ -293,6 +302,27 @@ def build_board_state_context(
         grouped_moves if not agent_to_move else None,
     )
 
+    side_to_move = "White" if board.turn == chess.WHITE else "Black"
+    hypothetical_piece_groups = ()
+    hypothetical_unavailable_reason = None
+    if board.is_check():
+        hypothetical_unavailable_reason = (
+            f"Unavailable: {side_to_move} is in check and cannot skip the turn."
+        )
+    elif board.is_game_over(claim_draw=False):
+        hypothetical_unavailable_reason = "Unavailable: this position is game over."
+    else:
+        hypothetical_board = board.copy(stack=False)
+        # A null move switches sides and expires en passant without moving a piece.
+        hypothetical_board.push(chess.Move.null())
+        hypothetical_piece_groups = _piece_groups(
+            hypothetical_board,
+            hypothetical_board.turn,
+            _group_legal_moves(
+                hypothetical_board, legal_moves(hypothetical_board.fen())
+            ),
+        )
+
     return BoardStateContext(
         board_label="Canonical Position"
         if source == "canonical"
@@ -302,7 +332,7 @@ def build_board_state_context(
         include_scratch_moves=include_scratch_moves,
         agent_side=agent_side,
         opponent_side=opponent_side,
-        side_to_move="White" if board.turn == chess.WHITE else "Black",
+        side_to_move=side_to_move,
         side_to_move_role="agent" if agent_to_move else "opponent",
         agent_to_move=agent_to_move,
         check_status="Yes" if board.is_check() else "No",
@@ -324,6 +354,9 @@ def build_board_state_context(
         side_to_move_piece_groups=(
             agent_piece_groups if agent_to_move else opponent_piece_groups
         ),
+        hypothetical_side_to_move="Black" if board.turn == chess.WHITE else "White",
+        hypothetical_piece_groups=hypothetical_piece_groups,
+        hypothetical_unavailable_reason=hypothetical_unavailable_reason,
     )
 
 

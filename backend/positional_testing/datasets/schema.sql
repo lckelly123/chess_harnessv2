@@ -65,3 +65,8 @@ CREATE TABLE IF NOT EXISTS model_run_passes (
     finished_at timestamptz,
     PRIMARY KEY (run_id, pass_number)
 );
+-- Nullable additive capture: historical passes are deliberately not reconstructed.
+ALTER TABLE model_run_passes ADD COLUMN IF NOT EXISTS model_input jsonb
+    CHECK (jsonb_typeof(model_input) = 'object');
+ALTER TABLE model_run_passes ADD COLUMN IF NOT EXISTS model_output jsonb
+    CHECK (jsonb_typeof(model_output) = 'object');

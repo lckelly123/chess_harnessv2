@@ -20,6 +20,7 @@ interface PositionQueueProps {
 
 export function PositionQueue({ positions, harnesses, modelSelection, singleRunning, onActiveChange, onInspect }: PositionQueueProps) {
   const id = useId();
+  const [name, setQueueName] = useState("");
   const [split, setSplit] = useState<"train" | "test">("train");
   const [dataset, setDataset] = useState("");
   const [harnessId, setHarnessId] = useState("");
@@ -47,11 +48,12 @@ export function PositionQueue({ positions, harnesses, modelSelection, singleRunn
     const load = async () => {
       try {
         const result = await matchApi.listPositionQueues();
-        const nextId = selectedId || result.items[0]?.id;
+        const nextId = result.items.some((item) => item.id === selectedId) ? selectedId : result.items[0]?.id;
         const detail = nextId ? await matchApi.getPositionQueue(nextId) : null;
         if (cancelled) return;
         setQueues(result.items);
         setQueue(detail);
+        if (selectedId && selectedId !== nextId) setSelectedId(nextId ?? "");
         onActiveChange(result.items.some(active));
         setError(null);
       } catch (caught) {
@@ -72,10 +74,11 @@ export function PositionQueue({ positions, harnesses, modelSelection, singleRunn
     setPending(true);
     setCommandError(null);
     try {
-      const result = await matchApi.createPositionQueue({ split, datasetVersion, harnessId, modelSelection });
+      const result = await matchApi.createPositionQueue({ name: name.trim() || undefined, split, datasetVersion, harnessId, modelSelection });
       setQueues((previous) => [result, ...previous.filter((q) => q.id !== result.id)]);
       setQueue(result);
       setSelectedId(result.id);
+      setQueueName("");
       setFailedOnly(false);
       onActiveChange(true);
     } catch (caught) {
@@ -110,6 +113,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, singleRunn
         <span className="position-queue__model">New queue: <strong>{modelName(modelSelection)}</strong></span>
       </header>
       <form className="position-queue__form" onSubmit={(event) => { event.preventDefault(); void start(); }}>
+        <label className="field-control position-queue__name" htmlFor={`${id}-name`}><span>Queue name (optional)</span><input id={`${id}-name`} value={name} maxLength={120} disabled={pending} placeholder="e.g. Qwen · revised prompt · training" autoComplete="off" onChange={(event) => setQueueName(event.target.value)} /></label>
         <label className="field-control" htmlFor={`${id}-set`}><span>Position set</span><select id={`${id}-set`} value={split} disabled={pending} onChange={(event) => setSplit(event.target.value as "train" | "test")}><option value="train">Training</option><option value="test">Test</option></select></label>
         <label className="field-control" htmlFor={`${id}-dataset`}><span>Dataset</span><select id={`${id}-dataset`} value={datasetVersion} disabled={pending || !datasets.length} onChange={(event) => setDataset(event.target.value)}>{datasets.length ? datasets.map((version) => <option key={version} value={version}>{version}</option>) : <option value="">No dataset available</option>}</select></label>
         <label className="field-control" htmlFor={`${id}-harness`}><span>Queue harness</span><select id={`${id}-harness`} value={harnessId} disabled={pending || !harnesses.length} onChange={(event) => setHarnessId(event.target.value)}><option value="">Choose a harness</option>{harnesses.map((harness) => <option key={harness.id} value={harness.id}>{harness.name}</option>)}</select></label>
@@ -118,10 +122,10 @@ export function PositionQueue({ positions, harnesses, modelSelection, singleRunn
       <p className="position-queue__hint">{singleRunning ? "The single-position run must finish before starting a queue." : hasActive ? "One queue is active. You can browse positions and traces while it runs." : `Runs every position in the ${setName(split).toLowerCase()} set, regardless of library filters. You can close this tab while it runs.`}</p>
       {error || commandError ? <div className="position-queue__error" role="alert"><span>{error || commandError}</span><button className="button button--secondary" type="button" onClick={() => { setCommandError(null); setRevision((value) => value + 1); }}><RefreshCw size={14} aria-hidden="true" />Refresh queue</button></div> : null}
       {loading ? <p role="status" className="position-queue__hint">Loading queues…</p> : null}
-      {queues.length > 0 ? <label className="field-control position-queue__history" htmlFor={`${id}-history`}><span>Recent queues</span><select id={`${id}-history`} value={selectedId || queues[0].id} onChange={(event) => { setSelectedId(event.target.value); setFailedOnly(false); }}>{queues.map((q) => <option key={q.id} value={q.id}>{setName(q.split)} · {q.harnessName} · {new Date(q.createdAt).toLocaleString()} · {q.status}</option>)}</select></label> : null}
+      {queues.length > 0 ? <label className="field-control position-queue__history" htmlFor={`${id}-history`}><span>Recent queues</span><select id={`${id}-history`} value={selectedId || queues[0].id} onChange={(event) => { setSelectedId(event.target.value); setFailedOnly(false); }}>{queues.map((q) => <option key={q.id} value={q.id}>{q.name ? `${q.name} · ` : ""}{setName(q.split)} · {q.harnessName} · {new Date(q.createdAt).toLocaleString()} · {q.status} · {q.id.slice(0, 8)}</option>)}</select></label> : null}
       {selected ? <div className="position-queue__progress">
         <p className="position-queue__id">Full queue run <code>{selected.id}</code></p>
-        <header><div><h3>{setName(selected.split)} set <span className={`run-status run-status--${selected.status}`}>{selected.status}</span></h3><p>{selected.harnessName} · {modelName(selected.modelSelection)} · {selected.datasetVersion}</p></div>{active(selected) ? <button className="button button--secondary" type="button" disabled={pending || selected.status === "stopping"} onClick={() => void stop()}><Square size={13} aria-hidden="true" />{selected.status === "stopping" ? "Stopping after current…" : "Stop after current"}</button> : null}</header>
+        <header><div><h3><span>{selected.name || `${setName(selected.split)} set`}</span><span className={`run-status run-status--${selected.status}`}>{selected.status}</span></h3><p>{selected.name ? `${setName(selected.split)} set · ` : ""}{selected.harnessName} · {modelName(selected.modelSelection)} · {selected.datasetVersion}</p></div>{active(selected) ? <button className="button button--secondary" type="button" disabled={pending || selected.status === "stopping"} onClick={() => void stop()}><Square size={13} aria-hidden="true" />{selected.status === "stopping" ? "Stopping after current…" : "Stop after current"}</button> : null}</header>
         <div className="position-queue__counts" aria-live="polite"><strong>{selected.completed + selected.failed} / {selected.total} attempted</strong><span>{selected.completed} completed</span><button type="button" className={selected.failed ? "run-failure" : ""} disabled={!selected.failed} onClick={() => { setFailedOnly(true); setExpanded(true); }}>{selected.failed} failed</button><span>{selected.pending} waiting{selected.skipped ? ` · ${selected.skipped} skipped` : ""}</span></div>
         <progress aria-label="Queue progress" max={selected.total} value={selected.completed + selected.failed + selected.skipped} />
         {current ? <div className="position-queue__current"><LoaderCircle className="spin" size={15} aria-hidden="true" /><span>Position {current.ordinal}: {positionsById.get(current.positionId)?.name ?? current.positionId}</span><button type="button" disabled={singleRunning} onClick={() => inspect(current)}>{current.runId ? "View live trace" : "View position"}</button></div> : null}

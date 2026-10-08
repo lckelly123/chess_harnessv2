@@ -40,6 +40,10 @@ class UnknownFolderError(ValueError):
     """A requested folder does not exist."""
 
 
+class MatchDeletionConflictError(ValueError):
+    """An active match cannot be removed while its worker is writing."""
+
+
 class MatchRepository:
     """Synchronous SQLite operations kept tiny and guarded for API/task access."""
 
@@ -267,6 +271,21 @@ class MatchRepository:
                 "SELECT COUNT(*) AS count FROM matches WHERE status IN ('queued', 'running')"
             ).fetchone()
         return int(row["count"])
+
+    def delete_match(self, match_id: str) -> bool:
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                "SELECT status FROM matches WHERE id = ?", (match_id,)
+            ).fetchone()
+            if row is None:
+                return False
+            if row["status"] in {"queued", "running"}:
+                raise MatchDeletionConflictError(
+                    "Stop this match in Match desk before deleting it."
+                )
+            # Positions and public events cascade; the folder remains available.
+            self._connection.execute("DELETE FROM matches WHERE id = ?", (match_id,))
+            return True
 
     def set_turn(self, match_id: str, player: str, ply: int, name: str) -> bool:
         with self._lock:

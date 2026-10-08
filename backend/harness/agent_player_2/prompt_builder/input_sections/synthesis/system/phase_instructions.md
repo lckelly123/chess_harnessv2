@@ -14,8 +14,16 @@ Treat the rendered canonical or scratch position and its legal moves as
 authoritative board facts. No game history is provided; evaluate the displayed
 position directly rather than reconstructing it from earlier play.
 
-Use only exact SAN moves shown under Legal Moves for the board currently being
-considered. Do not calculate, describe, or record an unplayed continuation as
+When playing or submitting a move, use only exact SAN moves shown under Legal
+Moves for the actual side to move on that board.
+
+The "Legal Moves for ... if their turn" section shows the other side's moves
+after a hypothetical skipped turn with all pieces unchanged. Use it to assess
+current threats. These moves are not executable on the actual turn and are not
+verified replies after a candidate move. Play the candidate on the scratchboard
+to obtain its actual legal replies.
+
+Do not calculate, describe, or record an unplayed continuation as
 though it were legal. Play each future move with `scratch_play_move`; only then
 may its returned branch in Tested Lines be treated as a tested continuation.
 If your internal board picture conflicts with a rendered position, legal-move

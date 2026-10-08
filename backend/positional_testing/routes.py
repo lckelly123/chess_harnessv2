@@ -1,8 +1,9 @@
 """HTTP routes for saved positional tests and one-turn harness runs."""
 
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Path, Query, Request, Response, status
 
 from app.matches.catalog import UnknownHarnessError
 from harness.contracts import HarnessError
@@ -13,9 +14,12 @@ from .catalog import (
     PositionLibraryUnavailableError,
     list_saved_positions,
 )
+from .exchange import present_exchange
 from .models import (
     CreatePositionQueueRequest,
+    ModelPassExchange,
     ModelRunDetail,
+    ModelRunFilterOptions,
     ModelRunList,
     PositionQueueDetail,
     PositionQueueList,
@@ -24,6 +28,7 @@ from .models import (
     SavedPositionRun,
 )
 from .queue_repository import EmptyPositionSetError, QueueConflictError
+from .run_repository import RunDeletionConflictError
 from .runner import PositionalTestRunner, UnknownSavedPositionError
 
 router = APIRouter(prefix="/api/positional-testing", tags=["positional testing"])
@@ -83,18 +88,84 @@ def list_model_runs(
     position_id: UUID | None = None,
     run_id: UUID | None = None,
     queue_tag: UUID | None = None,
+    split: Literal["train", "test"] | None = None,
+    dataset_version: str | None = Query(default=None, max_length=240),
+    harness: str | None = Query(default=None, max_length=240),
+    model: str | None = Query(default=None, max_length=240),
+    status: Literal["queued", "running", "completed", "failed", "skipped"]
+    | None = None,
+    analysis: Literal["completed", "failed", "missing"] | None = None,
+    classification: Literal[
+        "best", "excellent", "good", "inaccuracy", "mistake", "blunder"
+    ]
+    | None = None,
+    run_source: Literal["single", "queue"] | None = None,
+    query: str | None = Query(default=None, max_length=240),
+    sort: Literal["newest", "oldest"] = "newest",
     limit: int = Query(default=30, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> ModelRunList:
     try:
+        filters = {
+            key: value
+            for key, value in dict(
+                split=split,
+                dataset_version=dataset_version,
+                harness=harness,
+                model=model,
+                status=status,
+                analysis=analysis,
+                classification=classification,
+                run_source=run_source,
+                query=query,
+            ).items()
+            if value is not None
+        }
+        if sort != "newest":
+            filters["sort"] = sort
         items, total = _runner(request).repository.list(
             position_id,
             run_id,
             queue_tag=queue_tag,
             limit=limit,
             offset=offset,
+            **filters,
         )
         return ModelRunList(items=items, total=total)
+    except PositionLibraryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_model_run(run_id: UUID, request: Request) -> Response:
+    try:
+        deleted = _runner(request).repository.delete_run(run_id)
+    except RunDeletionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PositionLibraryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return Response(status_code=204)
+
+
+@router.delete("/queues/{queue_id}", status_code=204)
+def delete_queue(queue_id: UUID, request: Request) -> Response:
+    try:
+        deleted = request.app.state.position_queue.repository.delete_queue(queue_id)
+    except RunDeletionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PositionLibraryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Queue not found.")
+    return Response(status_code=204)
+
+
+@router.get("/run-filters", response_model=ModelRunFilterOptions)
+def get_run_filter_options(request: Request):
+    try:
+        return _runner(request).repository.filter_options()
     except PositionLibraryUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -108,6 +179,23 @@ def get_model_run(run_id: UUID, request: Request) -> ModelRunDetail:
     if row is None:
         raise HTTPException(status_code=404, detail="Run not found.")
     return ModelRunDetail(**row)
+
+
+@router.get(
+    "/runs/{run_id}/passes/{pass_number}/exchange", response_model=ModelPassExchange
+)
+def get_pass_exchange(run_id: UUID, request: Request, pass_number: int = Path(ge=1)):
+    try:
+        row = _runner(request).repository.get_pass_exchange(run_id, pass_number)
+    except PositionLibraryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pass not found.")
+    if row["model_input"] is None:
+        raise HTTPException(
+            status_code=409, detail="Model input/output was not recorded for this pass."
+        )
+    return present_exchange(row)
 
 
 @router.get("/positions", response_model=SavedPositionList)

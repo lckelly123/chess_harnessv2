@@ -78,8 +78,17 @@ one model invocation's emitted working notes and ordered tool-call array, with
 phase, status, error and timestamps. A call retains its ID, arguments, exposed
 result/error, execution order and relevant board context. Rejected batches mark
 rolled-back results and unexecuted calls; proposed notes from failed passes remain
-available for diagnosis. Missing notes are left empty, never inferred. Provider
-credentials, raw response envelopes and encrypted reasoning are not persisted.
+available for diagnosis. Missing notes are left empty, never inferred.
+
+New passes also store immutable `model_input` and `model_output` JSON snapshots.
+The provider adapter commits the full request body before sending it, including
+ordered messages, native tool history/definitions, and generation settings. It
+commits the returned response envelope before checking status or parsing tools.
+Provider-exposed text, native arguments, and opaque continuation fields are retained;
+credentials, HTTP headers, and tracing metadata are excluded. Retries have their
+own pass and snapshots. Transport failures/cancellations retain any committed
+input with a null output; recording never fabricates a response. Existing passes
+have null snapshots, and their prompts cannot be reconstructed retrospectively.
 
 A full queue creates its scheduled run rows before execution; standalone runs are
 created before model resolution. The recorder inserts a pass before calling the
@@ -99,6 +108,27 @@ individual calls to inspect arguments, results and board context. Running record
 refresh every two seconds. History survives page reloads; earlier transient runs
 are not recreated. The run repository applies the transactional schema migration
 on first use, preserving existing IDs, moves, grades, notes, and tool calls.
+
+**Expand** on a recorded pass opens a read-only Markdown view of **Input:** and
+**Output:** with a sticky **Back** arrow. Input decodes the saved request JSON once,
+showing message roles and Markdown content with real newlines; other request
+fields, tools, and unsupported content remain visible as JSON. Output renders
+every returned text/reasoning/refusal or function-argument string as a separate
+Markdown block in provider order, retaining repeated blocks. Headings, lists,
+tables, and code are formatted for reading. Literal HTML/XML model tags remain
+visible and inert, and image references appear as text without loading images.
+Markdown may normalize prose whitespace; the saved snapshots and API payloads
+remain unchanged. Opaque encrypted continuation data is stored but is not
+presented as generated text. An absent output is blank.
+
+The Back arrow, browser Back, or Escape returns to the mounted previous page,
+preserving the selected pass/run, filters, timeline and page scroll, and focus.
+The exchange URL supports reload and Forward; a direct link without a prior
+in-app history entry returns locally to the workspace. Leaving during a pending
+request prevents its late response from opening the viewer. Legacy passes have
+a disabled Expand action. The run detail response includes only
+`hasModelExchange`; the full payload is fetched on demand from the per-pass
+exchange endpoint.
 
 ## Automatic run evaluation
 
@@ -234,8 +264,15 @@ NULL `started_at`, and one shared random `queue_tag` UUID. Every batch gets a fr
 tag. The rows keep their IDs when they execute. Standalone attempts have NULL
 `queue_tag`. There are no separate queue or queue-item tables.
 
-Each run's `config.queue` captures the dataset version, split, requested model,
-batch creation time, and stop request; `config.queue_ordinal` freezes its order.
+Each run's `config.queue` captures the optional queue name, dataset version, split,
+requested model, batch creation time, and stop request; `config.queue_ordinal`
+freezes its order. The **Queue name (optional)** field in **Run a full set** accepts
+up to 120 characters. Names are normalized to single spaces, may be reused, and
+stay separate from the queue's UUID. Blank or omitted names are stored as null;
+older snapshots without the key remain valid. Names appear in Recent queues,
+queue progress, run history, and the Match Library queue selector and run details.
+Match Library's search includes queue names. Naming is organizational metadata
+and does not enter the model prompt or affect queue execution.
 Harness identity and runtime settings remain on the run. Queue HTTP endpoints
 are projections grouped by tag: progress, outcome counts, and queue status come
 from these run rows. History can filter by tag across all positions.

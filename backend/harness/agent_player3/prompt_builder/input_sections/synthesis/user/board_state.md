@@ -39,3 +39,19 @@ Change from canonical for {{ agent_side }}: {{ agent_material_change_from_canoni
 {{ group.piece_name }} {{ piece.square }}: {% if piece.legal_moves %}{{ piece.legal_moves | join(", ") }}{% else %}none{% endif %}
 {% endfor -%}
 {% endfor %}
+
+## Legal Moves for {{ hypothetical_side_to_move }} if their turn
+
+{% if hypothetical_unavailable_reason %}
+{{ hypothetical_unavailable_reason }}
+{% else %}
+Hypothetical: all pieces remain on their current squares, but {{ hypothetical_side_to_move }} moves next.
+The actual side to move is still {{ side_to_move }}.
+En passant: none after the hypothetical skipped turn.
+
+{% for group in hypothetical_piece_groups -%}
+{% for piece in group.pieces -%}
+{{ group.piece_name }} {{ piece.square }}: {% if piece.legal_moves %}{{ piece.legal_moves | join(", ") }}{% else %}none{% endif %}
+{% endfor -%}
+{% endfor %}
+{% endif %}

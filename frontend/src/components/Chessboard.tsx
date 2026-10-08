@@ -38,16 +38,17 @@ function parseFen(fen: string): Square[] {
 interface ChessboardProps {
   position: PositionRecord;
   flipped: boolean;
+  label?: string;
 }
 
-export function Chessboard({ position, flipped }: ChessboardProps) {
+export function Chessboard({ position, flipped, label }: ChessboardProps) {
   const squares = parseFen(position.fen);
   if (flipped) squares.reverse();
   const rows = Array.from({ length: 8 }, (_, index) => squares.slice(index * 8, index * 8 + 8));
 
   return (
     <div className="board-shell">
-      <div className="board" role="grid" aria-label={`Chess position after ${position.san}`}>
+      <div className="board" role="grid" aria-label={label ?? `Chess position after ${position.san}`}>
         {rows.map((row) => (
           <div className="board-row" role="row" key={row[0].coordinate}>
             {row.map((square) => {

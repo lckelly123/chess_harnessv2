@@ -1,7 +1,8 @@
-"""Extract pass notes and tool batches; never persist encrypted reasoning items."""
+"""Persist exact model exchanges separately from extracted pass notes and tools."""
 
 import json
 import re
+from copy import deepcopy
 from datetime import UTC, datetime
 
 from harness.model import visible_output
@@ -85,6 +86,18 @@ class PassRecorder:
         self.current["working_notes"] = "\n\n".join(notes) or None
         self.current["tool_calls"] = calls
         self.save()
+
+    def capture_input(self, payload):
+        if self.current is not None:
+            self.repository.save_pass_exchange(
+                self.run_id, self.number, model_input=deepcopy(payload)
+            )
+
+    def capture_output(self, payload):
+        if self.current is not None:
+            self.repository.save_pass_exchange(
+                self.run_id, self.number, model_output=deepcopy(payload)
+            )
 
     @staticmethod
     def call(value, call_id=None):

@@ -41,6 +41,7 @@ class MemoryRunRepository:
     def __init__(self):
         self.runs = {}
         self.passes = {}
+        self.exchanges = {}
 
     def create(self, run_id, position_id, model, harness, config):
         self.runs[run_id] = dict(
@@ -88,6 +89,27 @@ class MemoryRunRepository:
     def save_pass(self, row):
         self.passes[(row["run_id"], row["pass_number"])] = copy.deepcopy(row)
 
+    def save_pass_exchange(
+        self, run_id, pass_number, *, model_input=None, model_output=None
+    ):
+        row = self.exchanges.setdefault(
+            (run_id, pass_number), {"model_input": None, "model_output": None}
+        )
+        for key, value in (
+            ("model_input", model_input),
+            ("model_output", model_output),
+        ):
+            if row[key] is None:
+                row[key] = copy.deepcopy(value)
+
+    def get_pass_exchange(self, run_id, pass_number):
+        key = (str(run_id), pass_number)
+        if key not in self.passes:
+            return None
+        return copy.deepcopy(
+            self.exchanges.get(key, {"model_input": None, "model_output": None})
+        )
+
     def list(
         self, position_id=None, run_id=None, *, queue_tag=None, limit=30, offset=0
     ):
@@ -109,8 +131,14 @@ class MemoryRunRepository:
             {
                 **self.runs[run_id],
                 "passes": [
-                    row
-                    for (rid, _), row in sorted(self.passes.items())
+                    {
+                        **row,
+                        "has_model_exchange": self.exchanges.get((rid, number), {}).get(
+                            "model_input"
+                        )
+                        is not None,
+                    }
+                    for (rid, number), row in sorted(self.passes.items())
                     if rid == run_id
                 ],
             }

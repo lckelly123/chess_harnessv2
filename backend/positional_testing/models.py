@@ -95,6 +95,7 @@ class ModelRunSummary(PositionalTestingModel):
     id: UUID
     position_id: UUID
     queue_tag: UUID | None = None
+    queue_name: str | None = None
     model: str
     harness: str
     config: dict[str, Any]
@@ -110,6 +111,12 @@ class ModelRunSummary(PositionalTestingModel):
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    position_fen: str | None = None
+    dataset_version: str | None = None
+    split: Literal["train", "test"] | None = None
+    phase: str | None = None
+    position_type: str | None = None
+    analysis_status: Literal["completed", "failed", "missing"] = "missing"
 
 
 class ModelRunPass(PositionalTestingModel):
@@ -122,6 +129,12 @@ class ModelRunPass(PositionalTestingModel):
     error: str | None = None
     started_at: datetime
     finished_at: datetime | None = None
+    has_model_exchange: bool = False
+
+
+class ModelPassExchange(PositionalTestingModel):
+    input: str
+    output: list[str]
 
 
 class ModelRunDetail(ModelRunSummary):
@@ -133,11 +146,42 @@ class ModelRunList(PositionalTestingModel):
     total: int
 
 
+class RunHarnessOption(PositionalTestingModel):
+    id: str
+    name: str
+
+
+class RunQueueOption(PositionalTestingModel):
+    id: UUID
+    name: str | None = None
+    dataset_version: str
+    split: Literal["train", "test"]
+    harness_name: str
+    created_at: datetime
+
+
+class ModelRunFilterOptions(PositionalTestingModel):
+    datasets: list[str]
+    models: list[str]
+    harnesses: list[RunHarnessOption]
+    queues: list[RunQueueOption]
+
+
 class CreatePositionQueueRequest(PositionalTestingModel):
+    name: str | None = Field(default=None, max_length=120)
     dataset_version: str = Field(min_length=1, max_length=240)
     split: Literal["train", "test"]
     harness_id: str = Field(min_length=1, max_length=120)
     model_selection: ModelSelection | None = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value):
+        if isinstance(value, str):
+            value = " ".join(value.split()) or None
+            if value and "\x00" in value:
+                raise ValueError("Queue name cannot contain null characters.")
+        return value
 
     @field_validator("dataset_version", "harness_id")
     @classmethod
@@ -150,6 +194,7 @@ class CreatePositionQueueRequest(PositionalTestingModel):
 
 class PositionQueueSummary(PositionalTestingModel):
     id: UUID
+    name: str | None = None
     dataset_version: str
     split: Literal["train", "test"]
     harness_id: str

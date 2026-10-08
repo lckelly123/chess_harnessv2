@@ -44,6 +44,7 @@ class PositionQueueManager:
         definition = self.catalog.definition(request.harness_id)
         row = await run_in_threadpool(
             self.repository.enqueue,
+            name=request.name,
             dataset_version=request.dataset_version,
             split=request.split,
             definition=definition,

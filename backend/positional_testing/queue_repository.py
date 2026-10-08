@@ -5,10 +5,11 @@ from uuid import uuid4
 from psycopg.types.json import Jsonb
 
 from .datasets import store
-from .run_repository import RunRepository
+from .run_repository import RunDeletionConflictError, RunRepository, lock_state
 
 COUNTS = """
     SELECT queue_tag AS id,
+        min(config->'queue'->>'name') AS name,
         min(config->'queue'->>'dataset_version') AS dataset_version,
         min(config->'queue'->>'split') AS split,
         min(harness) AS harness_id,
@@ -51,15 +52,27 @@ def queue_summary(row):
     return row
 
 
-def lock_state(conn):
-    # Enqueue, claim and stop share this lock so two batches cannot start together.
-    conn.execute(
-        "SELECT pg_advisory_xact_lock(hashtextextended(current_schema() || ':position-queue-state', 0))"
-    )
-
-
 class QueueRepository(RunRepository):
-    def enqueue(self, *, dataset_version, split, definition, model_selection):
+    def delete_queue(self, queue_tag):
+        with self.connection() as conn:
+            lock_state(conn)
+            rows = conn.execute(
+                "SELECT status FROM model_runs WHERE queue_tag = %s FOR UPDATE",
+                (queue_tag,),
+            ).fetchall()
+            if not rows:
+                return False
+            if any(row["status"] in {"queued", "running"} for row in rows):
+                raise RunDeletionConflictError(
+                    "This queue is still active. Stop it in Positional testing "
+                    "and wait for the current run to finish before deleting it."
+                )
+            conn.execute("DELETE FROM model_runs WHERE queue_tag = %s", (queue_tag,))
+            return True
+
+    def enqueue(
+        self, *, dataset_version, split, definition, model_selection, name=None
+    ):
         queue_tag = uuid4()
         with self.connection() as conn:
             lock_state(conn)
@@ -83,6 +96,7 @@ class QueueRepository(RunRepository):
                 "harness_name": definition.name,
                 "harness_version": definition.version,
                 "queue": {
+                    "name": name,
                     "dataset_version": dataset_version,
                     "split": split,
                     "model_selection": model_selection.model_dump(mode="json"),

@@ -8,6 +8,21 @@ served by LM Studio or OpenAI. Optional LangSmith tracing records each agent tur
 Named game folders are SQLite-backed collections: choose one before starting a
 match, filter the record ledger by folder, or refile an existing match afterward.
 
+Match library has two views. **Agent vs agent** browses Match desk records in
+newest- or oldest-first order, with search, folders, and replay. **Positional
+testing** browses saved single runs and full queues. Combine queue, training/test
+set, engine-analysis status, move grade, dataset, harness, model, and run-status
+filters; search IDs or model names. Results page through the full stored history
+in groups of 30. Selecting an attempt shows its saved board, proposed move,
+Stockfish grade and losses, better moves, and model passes with working notes
+and tool results. Browsing saved results does not run a model. Each record has a
+trash icon to delete it and its saved trace. For a positional run in a queue,
+choose **Delete this run** or **Delete entire queue**; deleting a queue includes
+all of its runs, even those outside the current filters. Deletion is permanent
+and preserves source positions and game folders. Active runs must finish (or be
+stopped where supported) before deletion; stop an active queue and wait for its
+current run to finish before deleting the queue.
+
 
 cd C:\Repos\chess_harness_v2\chess_harnessv2\backend
 .\.venv\Scripts\langgraph.exe dev
@@ -101,6 +116,17 @@ For a live run, configure LM Studio and optional LangSmith credentials using
 [.env.example](.env.example). See [Agent Player 1 setup and migration
 notes](docs/agent-player-1.md). The web stack calls an agent only after a match is
 started or a saved positional test is explicitly run through the UI or API.
+
+## Agent Players 2 and 3
+
+Both harnesses show legal moves for each canonical and active scratch position.
+The actual side-to-move list is followed by **Legal Moves for White/Black if their
+turn**, using the other side's moves with unchanged piece placement. Both lists
+use the same piece grouping and mate/check/capture ordering. The hypothetical
+turn expires en passant and preserves castling rights; it never changes the real
+position or scratch line. In-check and game-over positions show an unavailable
+explanation instead. Hypothetical moves support threat assessment; actual
+candidate replies still come from playing the candidate on the scratchboard.
 
 ## Submit-only baseline
 

@@ -7,6 +7,7 @@ from uuid import uuid4
 import chess
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.main import create_app
 from app.matches.catalog import HARNESSES, UnknownHarnessError
@@ -105,10 +106,77 @@ async def wait_until(predicate, timeout=20):
             await asyncio.sleep(0.01)
 
 
+@pytest.mark.parametrize("split", ["train", "test"])
+def test_named_queues_survive_restart_and_search_without_replacing_ids(
+    queue_env, split
+):
+    manager, request = queue_env
+    request.split = split
+    request.name = "Prompt v2 · 50%_budget 雪"
+    first = asyncio.run(manager.enqueue(request))
+    manager.repository.stop(first["id"])
+    second = asyncio.run(manager.enqueue(request))
+    manager.repository.stop(second["id"])
+    assert first["id"] != second["id"]  # Reusing a label never merges two attempts.
+    restarted = QueueRepository()
+    assert restarted.get_queue(first["id"])["name"] == request.name
+    assert [q["name"] for q in restarted.list_queues()] == [request.name, request.name]
+    runs, total = restarted.list(query="50%_budget", split=split)
+    assert total == 400
+    assert all(row["queue_name"] == request.name for row in runs)
+    assert restarted.list(query="50X_budget")[1] == 0
+    assert restarted.list(query="50%Xbudget")[1] == 0
+    assert restarted.list(queue_tag=first["id"], query=request.name)[1] == 200
+    assert restarted.get(first["items"][0]["run_id"])["queue_name"] == request.name
+
+    # Older snapshots have no name key, and still appear under their UUID.
+    with restarted.connection() as conn:
+        conn.execute(
+            "UPDATE model_runs SET config = config #- '{queue,name}' WHERE queue_tag = %s",
+            (first["id"],),
+        )
+    assert restarted.get_queue(first["id"])["name"] is None
+    assert restarted.get(first["items"][0]["run_id"])["queue_name"] is None
+    assert (
+        next(q for q in restarted.filter_options()["queues"] if q["id"] == first["id"])[
+            "name"
+        ]
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        (None, None),
+        ("", None),
+        (" \n\t ", None),
+        ("  test   run\n雪  ", "test run 雪"),
+        ("a" * 120, "a" * 120),
+    ],
+)
+def test_queue_name_normalization(name, expected):
+    request = CreatePositionQueueRequest(
+        name=name, dataset_version="v1", split="test", harness_id=HARNESSES[0].id
+    )
+    assert request.name == expected
+
+
+@pytest.mark.parametrize(
+    "name", ["a" * 121, "bad\x00name", 123, {"name": "wrong type"}]
+)
+def test_queue_name_rejects_invalid_values(name):
+    with pytest.raises(ValidationError):
+        CreatePositionQueueRequest(
+            name=name, dataset_version="v1", split="test", harness_id=HARNESSES[0].id
+        )
+
+
 def test_full_queue_is_sequential_and_continues_after_model_and_evaluation_failures(
     queue_env,
 ):
     manager, request = queue_env
+    request.name = "Baseline · revised prompt"
 
     async def run():
         queued = await manager.enqueue(request)
@@ -127,6 +195,7 @@ def test_full_queue_is_sequential_and_continues_after_model_and_evaluation_failu
         return manager.repository.get_queue(queued["id"])
 
     result = asyncio.run(run())
+    assert result["name"] == request.name
     assert result["total"] == 200
     assert result["completed"] == 198
     assert result["failed"] == 2
@@ -146,6 +215,7 @@ def test_full_queue_is_sequential_and_continues_after_model_and_evaluation_failu
         item["run_id"] for item in result["items"]
     }
     assert all(r["queue_tag"] == result["id"] for r in first_page + last_page)
+    assert all(r["queue_name"] == request.name for r in first_page + last_page)
     model_failure, eval_failure = result["items"][1:3]
     assert model_failure["failure_stage"] == "execution"
     assert model_failure["error"] == "Scripted provider failure"
@@ -374,9 +444,11 @@ def test_queue_api_contract_and_validation(queue_env):
     with TestClient(app) as client:
         app.state.position_queue = manager
         payload = request.model_dump(mode="json", by_alias=True)
+        payload["name"] = "  Training   baseline\n雪  "
         created = client.post("/api/positional-testing/queues", json=payload)
         assert created.status_code == 202
         body = created.json()
+        assert body["name"] == "Training baseline 雪"
         assert body["total"] == body["pending"] == 200
         assert body["modelSelection"]["modelId"] == "gpt-terra"
         assert body["items"][0]["runId"] is not None
@@ -390,8 +462,21 @@ def test_queue_api_contract_and_validation(queue_env):
             == body["id"]
         )
         path = "/api/positional-testing/queues/" + body["id"]
+        assert client.get(path).json()["name"] == body["name"]
+        assert (
+            client.get("/api/positional-testing/queues").json()["items"][0]["name"]
+            == body["name"]
+        )
+        options = client.get("/api/positional-testing/run-filters").json()
+        assert options["queues"][0]["name"] == body["name"]
+        named_runs = client.get(
+            "/api/positional-testing/runs", params={"query": "baseline 雪"}
+        ).json()
+        assert named_runs["total"] == 200
+        assert named_runs["items"][0]["queueName"] == body["name"]
         assert client.get(path).json()["items"] == body["items"]
         assert client.post(path + "/stop").json()["status"] == "stopped"
+        assert client.get(path).json()["name"] == body["name"]
         assert client.post(path + "/stop").status_code == 200
         assert (
             client.post(
