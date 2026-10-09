@@ -1,10 +1,15 @@
 """Thin HTTP boundary over the match manager and repository."""
 
 import os
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
-from harness.model import ModelResolutionError
+from harness.model import (
+    ModelResolutionError,
+    loaded_lmstudio_models,
+    loaded_unsloth_models,
+)
 
 from .matches.catalog import UnknownHarnessError
 from .matches.manager import MatchConflictError, MatchManager
@@ -20,6 +25,7 @@ from .models import (
     GameFolderList,
     HarnessVersion,
     HealthResponse,
+    LoadedModelList,
     MatchDetail,
     MatchList,
     StartMatchRequest,
@@ -48,6 +54,17 @@ def health() -> HealthResponse:
 @router.get("/harnesses", response_model=list[HarnessVersion])
 def list_harnesses(request: Request) -> list[HarnessVersion]:
     return _manager(request).catalog.list()
+
+
+@router.get("/models", response_model=LoadedModelList)
+async def list_loaded_models(server: Literal["lmstudio", "unsloth"] = "lmstudio"):
+    try:
+        discover = (
+            loaded_unsloth_models if server == "unsloth" else loaded_lmstudio_models
+        )
+        return LoadedModelList(server=server, models=list(await discover()))
+    except ModelResolutionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/folders", response_model=GameFolderList)

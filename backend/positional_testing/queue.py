@@ -42,13 +42,16 @@ class PositionQueueManager:
 
     async def enqueue(self, request):
         definition = self.catalog.definition(request.harness_id)
+        selection = await self.catalog.pin_model_selection(
+            request.model_selection or ModelSelection(model_id="qwen")
+        )
         row = await run_in_threadpool(
             self.repository.enqueue,
             name=request.name,
             dataset_version=request.dataset_version,
             split=request.split,
             definition=definition,
-            model_selection=request.model_selection or ModelSelection(model_id="qwen"),
+            model_selection=selection,
         )
         self._wake.set()
         return row

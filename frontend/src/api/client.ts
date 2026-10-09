@@ -2,6 +2,7 @@ import type {
   GameFolder,
   GameFolderList,
   HarnessVersion,
+  LoadedModelList,
   MatchApi,
   MatchDetail,
   MatchList,
@@ -42,6 +43,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const matchApi: MatchApi = {
+  listLoadedModels: (server) => request<LoadedModelList>(`/api/models?server=${server}`),
   listPositionQueues: () => request<PositionQueueList>("/api/positional-testing/queues"),
   getPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}`),
   createPositionQueue: (input) => request<PositionQueueDetail>("/api/positional-testing/queues", { method: "POST", body: JSON.stringify(input) }),

@@ -5,9 +5,13 @@ export type TraceStatus = "complete" | "active" | "failed";
 
 // Backend allowlisted model selection, resolved once per run.
 export interface ModelSelection {
-  modelId: "qwen" | "gpt-terra";
+  modelId: "qwen" | "gpt-terra" | "unsloth";
   reasoningEffort: "medium";
+  modelName?: string | null;
 }
+
+export type LocalModelServer = "lmstudio" | "unsloth";
+export interface LoadedModelList { server: LocalModelServer; models: string[] }
 
 export interface HarnessVersion {
   id: string;
@@ -278,6 +282,7 @@ export interface PositionQueueDetail extends PositionQueueSummary { items: Posit
 export interface PositionQueueList { items: PositionQueueSummary[] }
 
 export interface MatchApi {
+  listLoadedModels(server: LocalModelServer): Promise<LoadedModelList>;
   listPositionQueues(): Promise<PositionQueueList>;
   getPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   createPositionQueue(input: CreatePositionQueueInput): Promise<PositionQueueDetail>;

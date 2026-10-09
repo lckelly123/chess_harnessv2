@@ -12,6 +12,7 @@ from langsmith.wrappers import wrap_openai
 from openai import (
     APIConnectionError,
     APIStatusError,
+    APITimeoutError,
     AsyncOpenAI,
     AuthenticationError,
     PermissionDeniedError,
@@ -20,6 +21,17 @@ from openai import (
 
 from harness.contracts import HarnessError
 from harness.recording import current_recorder
+
+# Local Unsloth installation. Environment overrides also support Docker/other hosts.
+DEFAULT_UNSLOTH_BASE_URL = "http://127.0.0.1:8888/v1"
+DEFAULT_UNSLOTH_API_KEY = "sk-unsloth-987414508ae01de7246a153e086906c8"
+
+
+def unsloth_connection() -> tuple[str, str]:
+    return (
+        os.getenv("UNSLOTH_BASE_URL") or DEFAULT_UNSLOTH_BASE_URL,
+        os.getenv("UNSLOTH_API_KEY") or DEFAULT_UNSLOTH_API_KEY,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +137,71 @@ async def resolve_lmstudio_model(
     return loaded[0]
 
 
+def _fetch_unsloth_models(base_url: str, api_key: str) -> tuple[str, ...]:
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}/models",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.load(response)
+    except urllib.error.HTTPError as exc:
+        if exc.code in {401, 403}:
+            raise ModelResolutionError(
+                "Unsloth authentication failed. Check the backend access token."
+            ) from exc
+        raise ModelResolutionError(
+            f"Unsloth model discovery failed (HTTP {exc.code})."
+        ) from exc
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        raise ModelResolutionError(
+            "Unsloth is unavailable. Open Studio and load your fine-tuned model."
+        ) from exc
+    models = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(models, list):
+        raise ModelResolutionError("Unsloth returned an invalid model inventory.")
+    return tuple(
+        dict.fromkeys(
+            model["id"]
+            for model in models
+            if isinstance(model, dict)
+            and model.get("loaded") is True
+            and isinstance(model.get("id"), str)
+            and model["id"].strip()
+            and model.get("task") in {None, "text-generation"}
+        )
+    )
+
+
+async def loaded_unsloth_models(
+    *, base_url: str | None = None, api_key: str | None = None
+) -> tuple[str, ...]:
+    """Only advertise loaded models, including the exact fine-tuned checkpoint id."""
+    configured_url, configured_key = unsloth_connection()
+    return await asyncio.to_thread(
+        _fetch_unsloth_models, base_url or configured_url, api_key or configured_key
+    )
+
+
+async def resolve_unsloth_model(explicit: str | None = None) -> str:
+    configured = (
+        explicit if explicit is not None else os.getenv("UNSLOTH_MODEL", "")
+    ).strip()
+    if configured:
+        return configured
+    loaded = await loaded_unsloth_models()
+    if not loaded:
+        raise ModelResolutionError(
+            "Unsloth has no loaded language model. Load your fine-tuned checkpoint in Studio."
+        )
+    if len(loaded) > 1:
+        raise ModelResolutionError(
+            "Unsloth has multiple loaded models. Select one in Model settings "
+            "or set UNSLOTH_MODEL explicitly."
+        )
+    return loaded[0]
+
+
 class _ResponsesModel:
     def __init__(self, client: AsyncOpenAI, *, provider: str, label: str):
         self.client = wrap_openai(client)
@@ -193,6 +270,11 @@ class _ResponsesModel:
             raise HarnessError(
                 f"{self.label} rate limit or quota exceeded. Check API limits and billing."
             ) from exc
+        except APITimeoutError as exc:
+            raise HarnessError(
+                f"{self.label} timed out waiting for {model}. "
+                "The server may still be generating."
+            ) from exc
         except APIConnectionError as exc:
             raise HarnessError(
                 f"{self.label} could not be reached. Check the connection and try again."
@@ -233,6 +315,28 @@ class LMStudioModel(_ResponsesModel):
             ),
             provider="lmstudio",
             label="LM Studio",
+        )
+
+
+class UnslothModel(_ResponsesModel):
+    def __init__(
+        self,
+        client: AsyncOpenAI | None = None,
+        *,
+        base_url: str | None = None,
+        api_key: str | None = None,
+    ):
+        configured_url, configured_key = unsloth_connection()
+        super().__init__(
+            client
+            or AsyncOpenAI(
+                base_url=base_url or configured_url,
+                api_key=api_key or configured_key,
+                timeout=float(os.getenv("UNSLOTH_TIMEOUT_SECONDS") or "600"),
+                max_retries=0,
+            ),
+            provider="unsloth",
+            label="Unsloth",
         )
 
 

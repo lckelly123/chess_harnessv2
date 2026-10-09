@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from harness.model import LMStudioModel, OpenAIModel
+from harness.model import LMStudioModel, OpenAIModel, UnslothModel
 from positional_testing.queue import PositionQueueManager
 from positional_testing.routes import router as positional_testing_router
 from positional_testing.runner import PositionalTestRunner
@@ -37,12 +37,16 @@ def create_app(
 
         model_client = None
         openai_client = None
+        unsloth_client = None
         active_catalog = catalog
         if active_catalog is None:
             model_client = LMStudioModel()
+            unsloth_client = UnslothModel()
             if os.getenv("OPENAI_API_KEY", "").strip():
                 openai_client = OpenAIModel()
-            active_catalog = HarnessCatalog(model_client, openai_model=openai_client)
+            active_catalog = HarnessCatalog(
+                model_client, openai_model=openai_client, unsloth_model=unsloth_client
+            )
 
         manager = MatchManager(active_repository, active_catalog, configured_settings)
         app.state.match_manager = manager
@@ -61,6 +65,8 @@ def create_app(
                 await model_client.aclose()
             if openai_client is not None:
                 await openai_client.aclose()
+            if unsloth_client is not None:
+                await unsloth_client.aclose()
             if owns_repository:
                 active_repository.close()
 

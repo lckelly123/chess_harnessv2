@@ -65,14 +65,20 @@ svg { flex-shrink: 0; }
 .workspace-nav__button--active:hover { background: #35264f; }
 .nav-count { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
 .sidebar-settings { display: grid; gap: 20px; margin-top: auto; }
-.model-settings { display: grid; gap: 14px; padding: 16px 7px; border-top: 1px solid var(--rule-soft); }
+.model-settings { display: grid; min-width: 0; gap: 14px; padding: 16px 7px; border-top: 1px solid var(--rule-soft); }
 .model-settings h2 { display: flex; gap: 8px; align-items: center; color: var(--ink-soft); font-size: 13px; letter-spacing: 0; }
-.model-settings__field { display: grid; gap: 7px; font-size: 11px; color: var(--muted); }
+.model-settings__field { display: grid; min-width: 0; gap: 7px; font-size: 11px; color: var(--muted); }
 .model-settings__field select { min-width: 0; width: 100%; min-height: 38px; padding: 0 10px; color: var(--ink); background: var(--surface-raised); border: 1px solid var(--rule); border-radius: 7px; font-size: 13px; }
 .model-settings__reasoning > div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .model-settings__reasoning dt { color: var(--muted); }
 .model-settings__reasoning dd { margin: 0; color: var(--ink-soft); }
 .model-settings__status { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; }
+.model-settings__connection { display: grid; gap: 8px; min-width: 0; }
+.model-settings__status svg { flex-shrink: 0; }
+.model-settings__status span { overflow-wrap: anywhere; }
+.model-settings__status--error { color: var(--danger); }
+.model-settings__refresh { display: inline-flex; justify-self: start; align-items: center; gap: 6px; min-height: 32px; padding: 0 7px; border: 1px solid var(--rule); border-radius: 7px; background: var(--surface-raised); color: var(--ink-soft); font-size: 11px; }
+.model-settings__refresh:hover:not(:disabled) { color: var(--ink); background: var(--surface-hover); }
 .environment-mark { display: flex; gap: 8px; align-items: center; padding: 16px 7px 0; border-top: 1px solid var(--rule-soft); color: var(--muted); font-size: 11px; }
 .version-mark { margin-left: auto; }
 .app-content { min-width: 0; }
@@ -457,13 +463,12 @@ details[open] > summary > svg:last-child { transform: rotate(180deg); }
   .workspace-nav__button { padding: 0 10px; gap: 7px; font-size: 12px; }
   .nav-count { display: none; }
   .sidebar-settings { width: 100%; margin: 0; }
-  .model-settings { display: flex; align-items: center; gap: 16px; padding: 12px 0 0; }
-  .model-settings h2 { font-size: 12px; }
-  .model-settings__field { display: flex; align-items: center; gap: 8px; }
-  .model-settings__field > span { display: none; }
-  .model-settings__field select { width: 130px; min-height: 34px; }
+  .model-settings { grid-template-columns: minmax(120px, .6fr) minmax(0, 1.4fr) auto; align-items: center; gap: 16px; padding: 12px 0 0; }
+  .model-settings h2 { display: none; }
+  .model-settings__field { gap: 6px; }
+  .model-settings__field select { width: 100%; min-height: 38px; }
   .model-settings__reasoning > div { gap: 7px; }
-  .model-settings__status { margin-left: auto; }
+  .model-settings__connection { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
   .environment-mark { display: none; }
   .workspace-heading h1 { font-size: 25px; }
   .board { width: min(100%,540px); }
@@ -523,7 +528,9 @@ details[open] > summary > svg:last-child { transform: rotate(180deg); }
 }
 @media (max-width: 480px) {
   .model-settings h2 { display: none; }
-  .model-settings__field select { width: 115px; }
+  .model-settings { grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); }
+  .model-settings__field select { width: 100%; }
+  .model-settings__reasoning { grid-column: 1 / -1; }
   .model-settings__reasoning dt { display: none; }
   .model-settings__reasoning dd::after { content: " reasoning"; color: var(--muted); }
   .model-settings__reasoning > div { font-size: 11px; }

@@ -5,7 +5,7 @@ import type { HarnessVersion, ModelSelection, PositionalTestPosition, PositionQu
 import { tagLabel } from "./positionFilters";
 
 const active = (queue: PositionQueueSummary) => ["queued", "running", "stopping"].includes(queue.status);
-const modelName = (selection: ModelSelection) => selection.modelId === "gpt-terra" ? "GPT Terra" : "Qwen";
+const modelName = (selection: ModelSelection) => selection.modelId === "gpt-terra" ? "GPT Terra" : `${selection.modelId === "unsloth" ? "Unsloth" : "LM Studio"} · ${selection.modelName ?? "loaded model"}`;
 const message = (caught: unknown) => caught instanceof Error ? caught.message : "Queue unavailable. Retry to reconnect.";
 const setName = (split: string) => split === "train" ? "Training" : "Test";
 
@@ -13,12 +13,13 @@ interface PositionQueueProps {
   positions: PositionalTestPosition[];
   harnesses: HarnessVersion[];
   modelSelection: ModelSelection;
+  modelReady: boolean;
   singleRunning: boolean;
   onActiveChange: (active: boolean) => void;
   onInspect: (positionId: string, runId: string | null) => void;
 }
 
-export function PositionQueue({ positions, harnesses, modelSelection, singleRunning, onActiveChange, onInspect }: PositionQueueProps) {
+export function PositionQueue({ positions, harnesses, modelSelection, modelReady, singleRunning, onActiveChange, onInspect }: PositionQueueProps) {
   const id = useId();
   const [name, setQueueName] = useState("");
   const [split, setSplit] = useState<"train" | "test">("train");
@@ -70,7 +71,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, singleRunn
   }, [selectedId, revision, onActiveChange]);
 
   const start = async () => {
-    if (!count || !harnessId || hasActive || singleRunning || pending || error) return;
+    if (!count || !harnessId || hasActive || singleRunning || pending || error || !modelReady) return;
     setPending(true);
     setCommandError(null);
     try {
@@ -117,7 +118,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, singleRunn
         <label className="field-control" htmlFor={`${id}-set`}><span>Position set</span><select id={`${id}-set`} value={split} disabled={pending} onChange={(event) => setSplit(event.target.value as "train" | "test")}><option value="train">Training</option><option value="test">Test</option></select></label>
         <label className="field-control" htmlFor={`${id}-dataset`}><span>Dataset</span><select id={`${id}-dataset`} value={datasetVersion} disabled={pending || !datasets.length} onChange={(event) => setDataset(event.target.value)}>{datasets.length ? datasets.map((version) => <option key={version} value={version}>{version}</option>) : <option value="">No dataset available</option>}</select></label>
         <label className="field-control" htmlFor={`${id}-harness`}><span>Queue harness</span><select id={`${id}-harness`} value={harnessId} disabled={pending || !harnesses.length} onChange={(event) => setHarnessId(event.target.value)}><option value="">Choose a harness</option>{harnesses.map((harness) => <option key={harness.id} value={harness.id}>{harness.name}</option>)}</select></label>
-        <button className="button button--primary" type="submit" disabled={loading || !!error || pending || singleRunning || hasActive || !count || !harnesses.some((h) => h.id === harnessId)}><ListOrdered size={16} aria-hidden="true" />Run full queue{count ? ` · ${count}` : ""}</button>
+        <button className="button button--primary" type="submit" disabled={loading || !!error || pending || singleRunning || !modelReady || hasActive || !count || !harnesses.some((h) => h.id === harnessId)}><ListOrdered size={16} aria-hidden="true" />Run full queue{count ? ` · ${count}` : ""}</button>
       </form>
       <p className="position-queue__hint">{singleRunning ? "The single-position run must finish before starting a queue." : hasActive ? "One queue is active. You can browse positions and traces while it runs." : `Runs every position in the ${setName(split).toLowerCase()} set, regardless of library filters. You can close this tab while it runs.`}</p>
       {error || commandError ? <div className="position-queue__error" role="alert"><span>{error || commandError}</span><button className="button button--secondary" type="button" onClick={() => { setCommandError(null); setRevision((value) => value + 1); }}><RefreshCw size={14} aria-hidden="true" />Refresh queue</button></div> : null}

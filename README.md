@@ -3,7 +3,7 @@
 A local observability console for agent-versus-agent chess matches. A React match
 desk controls a deterministic FastAPI match runner, SQLite stores replayable
 positions and public events, and independent LangGraph harnesses call a model
-served by LM Studio or OpenAI. Optional LangSmith tracing records each agent turn.
+served by LM Studio, Unsloth Studio, or OpenAI. Optional LangSmith tracing records each agent turn.
 
 Named game folders are SQLite-backed collections: choose one before starting a
 match, filter the record ledger by folder, or refile an existing match afterward.
@@ -29,8 +29,8 @@ cd C:\Repos\chess_harness_v2\chess_harnessv2\backend
 
 ## Run locally with Docker
 
-Prerequisites: Docker Desktop with Compose, plus either an LM Studio server with
-one loaded language model or an OpenAI API key. Copy `.env.example` to `.env`;
+Prerequisites: Docker Desktop with Compose, plus an LM Studio or Unsloth server
+with a loaded language model, or an OpenAI API key. Copy `.env.example` to `.env`;
 a blank `LMSTUDIO_MODEL` selects the only loaded model, while multiple loaded
 models require an explicit identifier.
 
@@ -51,24 +51,38 @@ for import commands, schema details, and the exact phase/quiet/tactical mix.
 
 ### Model selection
 
-The web UI's model selector applies to new matches (both players) and one-turn
-positional tests. Each run keeps its selected client and settings; changing the
-selector never changes an active run.
+The web UI's model selector applies to new matches (both players), one-turn
+positional tests, and full-set queues. Choose a **Server**, then its **Loaded
+model**. A single loaded model is selected automatically; use **Refresh** after
+loading or switching a checkpoint in your server. Runs are disabled when that
+model is unavailable. Each run keeps its selected client and settings, and queues
+save the exact model identifier for every position in the set.
 
-- **Qwen** uses the configured or discovered LM Studio model. It remains the
-  default when an older API client omits `modelSelection`.
-- **GPT Terra** uses OpenAI's `gpt-5.6-terra` with medium reasoning. Set
+- **LM Studio** lists its loaded language models. It remains the default when an
+  older API client omits `modelSelection` (the API identifier remains `qwen`).
+- **Unsloth** lists loaded checkpoints, including fine-tuned adapters. Choose
+  Agent Player 2 and your fine-tuned checkpoint to use the existing prompts,
+  reasoning, tools, and raw exchange recording through Unsloth's `/v1/responses`.
+  The local URL (`http://127.0.0.1:8888/v1`) and supplied access token are defaults
+  in `backend/harness/model.py`. Docker uses `http://host.docker.internal:8888/v1`
+  to reach the host. `UNSLOTH_BASE_URL` and `UNSLOTH_API_KEY` optionally override
+  those defaults; `UNSLOTH_MODEL` pins a checkpoint for API clients that omit
+  `modelName`. Credentials stay in the backend. Load this training checkpoint
+  with at least 8192 context tokens to fit the full Agent Player 2 prompts.
+  Unsloth calls allow 600 seconds for local generation; override with
+  `UNSLOTH_TIMEOUT_SECONDS` if needed.
+- **OpenAI** uses GPT Terra (`gpt-5.6-terra`) with medium reasoning. Set
   `OPENAI_API_KEY` in the root `.env`, then run
   `docker compose up -d --force-recreate backend`. Keys remain backend-only.
   GPT selection does not require LM Studio to be running and never falls back
   to Qwen when credentials or API access fail.
 
-Both providers receive the same graph-built prompts and text-tagged tool
+The providers receive the same graph-built prompts and text-tagged tool
 protocol. GPT's default total output cap is 8000 tokens per normal pass, including
 hidden reasoning and visible output. Forced-format retries use no reasoning and
 a 2000-token cap. Set `OPENAI_MAX_OUTPUT_TOKENS` and
 `OPENAI_RETRY_MAX_OUTPUT_TOKENS` to override these; use 2000/600 for a cap-matched
-Agent Player comparison. Qwen's existing harness limits are unchanged. Raw GPT
+Agent Player comparison. LM Studio and Unsloth use the existing harness limits. Raw GPT
 reasoning is not available for retries; they use the current position, persistent
 notes, parser feedback, and any visible previous output instead.
 

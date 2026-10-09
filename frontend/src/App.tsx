@@ -45,6 +45,7 @@ export default function App() {
   const [flipped, setFlipped] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
   const [folderBusy, setFolderBusy] = useState(false);
   const [folderError, setFolderError] = useState<string | null>(null);
   const [assigningMatchId, setAssigningMatchId] = useState<string | null>(null);
@@ -300,7 +301,7 @@ export default function App() {
           </button>
         </nav>
         <div className="sidebar-settings">
-          <ModelSelector selection={modelSelection} disabled={busy || positionalRunning} onChange={setModelSelection} />
+          <ModelSelector selection={modelSelection} disabled={busy || positionalRunning} onChange={setModelSelection} onReadyChange={setModelReady} />
           <div className="environment-mark"><Server size={15} aria-hidden="true" /><span>Local workspace</span><span className="version-mark">v2</span></div>
         </div>
       </aside>
@@ -324,7 +325,7 @@ export default function App() {
 
           <div hidden={workspaceSection !== "matches"}>
             <div id="match-setup" className="match-setup" hidden={!showSetup}>
-              <MatchDocket harnesses={harnesses} whiteId={whiteId} blackId={blackId} folders={folders} folderId={startFolderId} busy={busy || loading} folderBusy={folderBusy} folderError={folderError} onWhiteChange={setWhiteId} onBlackChange={setBlackId} onFolderChange={setStartFolderId} onCreateFolder={createFolder} onStart={startMatch} />
+              <MatchDocket harnesses={harnesses} whiteId={whiteId} blackId={blackId} folders={folders} folderId={startFolderId} busy={busy || loading} modelReady={modelReady} folderBusy={folderBusy} folderError={folderError} onWhiteChange={setWhiteId} onBlackChange={setBlackId} onFolderChange={setStartFolderId} onCreateFolder={createFolder} onStart={startMatch} />
             </div>
             {error ? (
               <div className="error-banner" role="alert">
@@ -373,7 +374,7 @@ export default function App() {
             <div hidden={libraryType !== "positions"}><PositionalRunLibrary active={workspaceSection === "records" && libraryType === "positions"} /></div>
           </div>
           <div hidden={workspaceSection !== "positional-testing"}>
-            <PositionalTesting modelSelection={modelSelection} running={positionalRunning} onRunningChange={setPositionalRunning} />
+            <PositionalTesting modelSelection={modelSelection} modelReady={modelReady} running={positionalRunning} onRunningChange={setPositionalRunning} />
           </div>
         </main>
         <footer><span>Chess Harness <span aria-hidden="true">/</span> Agent research</span><span>Backend-verified positions · Public decision traces</span></footer>

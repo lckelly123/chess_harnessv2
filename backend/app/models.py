@@ -109,8 +109,14 @@ class MatchList(ApiModel):
 class ModelSelection(ApiModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    model_id: Literal["qwen", "gpt-terra"]
+    model_id: Literal["qwen", "gpt-terra", "unsloth"]
     reasoning_effort: Literal["medium"] = "medium"
+    model_name: str | None = Field(default=None, min_length=1, max_length=512)
+
+
+class LoadedModelList(ApiModel):
+    server: Literal["lmstudio", "unsloth"]
+    models: list[str]
 
 
 class StartMatchRequest(ApiModel):

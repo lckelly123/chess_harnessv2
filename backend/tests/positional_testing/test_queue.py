@@ -46,6 +46,9 @@ class ScriptedCatalog:
         self.selections.append(model_selection)
         return self, "offline-queue-model"
 
+    async def pin_model_selection(self, selection):
+        return selection
+
     async def choose_move(self, request):
         self.calls += 1
         self.inflight += 1

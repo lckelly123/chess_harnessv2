@@ -10,6 +10,7 @@ interface MatchDocketProps {
   folders: GameFolder[];
   folderId: string;
   busy: boolean;
+  modelReady: boolean;
   folderBusy: boolean;
   folderError: string | null;
   onWhiteChange(value: string): void;
@@ -26,6 +27,7 @@ export function MatchDocket({
   folders,
   folderId,
   busy,
+  modelReady,
   folderBusy,
   folderError,
   onWhiteChange,
@@ -39,7 +41,7 @@ export function MatchDocket({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onStart();
+    if (modelReady && !busy) onStart();
   };
 
   const createFolder = async () => {
@@ -134,7 +136,7 @@ export function MatchDocket({
         {addingFolder && folderError ? <p className="docket-folder-error" role="alert">{folderError}</p> : null}
       </div>
       <div className="docket-actions">
-        <button className="button button--primary" type="submit" disabled={busy || !whiteId || !blackId}>
+        <button className="button button--primary" type="submit" disabled={busy || !modelReady || !whiteId || !blackId}>
           <Play size={16} strokeWidth={2} aria-hidden="true" />
           {busy ? "Starting…" : "Start match"}
         </button>

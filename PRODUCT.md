@@ -13,6 +13,7 @@ The primary user is the developer or researcher building the harness. They need 
 The first release is a React web interface served locally through Docker. It lets the user:
 
 - select the white and black harness versions;
+- choose LM Studio, Unsloth, or OpenAI for model requests, and discover and select exact loaded checkpoint IDs from the local servers;
 - start and stop an agent-v-agent match;
 - watch the backend-authored position, status, clocks, and trace stream;
 - search previous matches;
@@ -32,9 +33,10 @@ run in the background.
 - The backend is authoritative for match state, legal moves, results, and traces.
 - The frontend never chooses chess moves and exposes no human move controls.
 - Public UI events summarize match progress; detailed graph execution remains in LangSmith.
+- Shared model controls apply to new matches, single-position tests, and full-set queues. Local starts require a selected loaded model; loading, connection errors, empty inventories, and unavailable selections are explained beside the controls, with refresh available to check the server again.
 - Positional-test attempts and per-pass working notes/tool results persist in PostgreSQL. They do not create a match record or mutate the saved PGN. Successful Stockfish evaluations record an expected-points-loss classification and all strictly better legal moves for future training. Grading failures retain the model trace and error; existing runs are not backfilled.
 - New positional passes also persist the actual provider request and raw response before validation. Expand leaves the pass summary intact and opens a Markdown reading view of Input and Output with a sticky Back arrow. Back, browser Back, or Escape returns to the same pass with its selection, filters, scroll, and focus preserved. Presentation does not change the saved exchange. Historical passes without captured input/output cannot be expanded.
-- Full-set queues capture their dataset, split, harness, model selection, and position membership when created, regardless of library filters. One queue runs at a time, completing each model turn and evaluation before the next position. Execution, validation, evaluation, and timeout failures are flagged in PostgreSQL and the queue continues. Closing the browser does not stop it; a backend restart resumes pending positions without replaying interrupted attempts.
+- Full-set queues capture their dataset, split, harness, model selection (including the selected local checkpoint), and position membership when created, regardless of library filters. One queue runs at a time, completing each model turn and evaluation before the next position. Execution, validation, evaluation, and timeout failures are flagged in PostgreSQL and the queue continues. Closing the browser does not stop it; a backend restart resumes pending positions without replaying interrupted attempts.
 - Training and test queues can have an optional name for organization. Names appear in queue progress, recent queues, run history, and Match Library filters/search; the queue UUID remains its identity, including when names are reused.
 - The first release stays deliberately small: no authentication, tournaments, agent configuration editor, or trace mutation.
 - Harness selections are versioned identifiers, not editable prompts.
@@ -42,7 +44,7 @@ run in the background.
 
 ## Information contract
 
-The frontend needs seven backend-facing resources:
+The frontend needs eight backend-facing resources:
 
 1. **Harness versions** — stable id, display name, version, and short description.
 2. **Game folders** — stable id, user-defined name, and match count for durable organization.
@@ -51,6 +53,7 @@ The frontend needs seven backend-facing resources:
 5. **Match commands and updates** — start, stop, folder assignment, and polled snapshots with a possible future server-sent event stream.
 6. **Positional tests** — PostgreSQL exercise summaries with visible/filterable classifiers, a one-turn command, and saved attempts with the selected harness, resolved model, proposed legal move, emitted notes/tool results, and evaluation. Engine references and exercise classifications stay out of model inputs.
 7. **Full-set queues** — start/stop commands and durable snapshots containing captured configuration, progress counts, ordered position statuses, failure details, and links to saved attempts.
+8. **Loaded models** — the selected local server and its loaded checkpoint IDs, with refresh and explicit error handling so runs use an available model.
 
 Every trace event has a stable id, timestamp, ply, player, phase, status, short summary, and optional structured detail. The browser may format and filter these fields, but it does not infer hidden backend state.
 

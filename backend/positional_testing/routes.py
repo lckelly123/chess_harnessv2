@@ -56,6 +56,8 @@ async def create_queue(request_body: CreatePositionQueueRequest, request: Reques
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except (UnknownHarnessError, EmptyPositionSetError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ModelResolutionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except PositionLibraryUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

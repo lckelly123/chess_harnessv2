@@ -15,7 +15,12 @@ from harness.agent_player_2 import AgentConfig as AgentPlayer2Config
 from harness.agent_player_2 import AgentPlayer2
 from harness.baseline import BaselineAgent, BaselineConfig
 from harness.contracts import PlayerHarness
-from harness.model import Model, ModelResolutionError, resolve_lmstudio_model
+from harness.model import (
+    Model,
+    ModelResolutionError,
+    resolve_lmstudio_model,
+    resolve_unsloth_model,
+)
 
 BASELINE_ID = "baseline-direct-submit-langgraph-v1"
 AGENT_PLAYER_1_ID = "agent-player-1-langgraph-v1"
@@ -83,10 +88,14 @@ class HarnessCatalog:
         model_resolver: Callable[[], Awaitable[str]] = resolve_lmstudio_model,
         *,
         openai_model: Model | None = None,
+        unsloth_model: Model | None = None,
+        unsloth_resolver: Callable[[], Awaitable[str]] = resolve_unsloth_model,
     ):
         self._model = model
         self._model_resolver = model_resolver
         self._openai_model = openai_model
+        self._unsloth_model = unsloth_model
+        self._unsloth_resolver = unsloth_resolver
         self._definitions = {definition.id: definition for definition in HARNESSES}
 
     def list(self) -> list[HarnessVersion]:
@@ -126,6 +135,11 @@ class HarnessCatalog:
         resolved = await self._resolve_model(model_selection)
         return self._create(harness_id, resolved, cancellation_check), resolved.name
 
+    async def pin_model_selection(self, selection: ModelSelection) -> ModelSelection:
+        """Capture one exact model for every position in a newly created queue."""
+        resolved = await self._resolve_model(selection)
+        return selection.model_copy(update={"model_name": resolved.name})
+
     async def _resolve_model(self, selection: ModelSelection | None) -> _ResolvedModel:
         if selection is not None and selection.model_id == "gpt-terra":
             if self._openai_model is None:
@@ -145,9 +159,20 @@ class HarnessCatalog:
                     "OPENAI_RETRY_MAX_OUTPUT_TOKENS", 2000
                 ),
             )
+        if selection is not None and selection.model_id == "unsloth":
+            if self._unsloth_model is None:
+                raise ModelResolutionError("Unsloth is not configured in this backend.")
+            return _ResolvedModel(
+                client=self._unsloth_model,
+                name=selection.model_name or await self._unsloth_resolver(),
+                provider="unsloth",
+                reasoning_effort=selection.reasoning_effort,
+                retry_reasoning_effort="none",
+            )
         return _ResolvedModel(
             client=self._model,
-            name=await self._model_resolver(),
+            name=(selection.model_name if selection else None)
+            or await self._model_resolver(),
             provider="lmstudio",
             reasoning_effort=selection.reasoning_effort
             if selection is not None

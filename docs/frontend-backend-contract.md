@@ -27,6 +27,7 @@ The TypeScript source of truth for the client is [`frontend/src/api/contracts.ts
 | --- | --- | --- |
 | `GET` | `/api/health` | Reports SQLite storage and model-selection mode. |
 | `GET` | `/api/harnesses` | Returns the two registered LangGraph harness versions. |
+| `GET` | `/api/models?server=lmstudio` | Lists loaded model identifiers for `lmstudio` or `unsloth` as `{ "server": "...", "models": ["..."] }`. Unsloth uses authenticated `/v1/models`; downloaded but unloaded models are excluded. Unavailable server/authentication returns 503; an unknown server returns 422. No credentials are exposed. |
 | `GET` | `/api/folders` | Returns named folders and durable match counts. |
 | `POST` | `/api/folders` | Creates a unique, case-insensitive named folder. |
 | `GET` | `/api/matches?query=...&folder_id=...&unfiled_only=...` | Searches durable SQLite records. `folder_id` scopes a named folder; `unfiled_only=true` selects records without a folder, and the two filters are mutually exclusive. |
@@ -57,14 +58,18 @@ continue to use the stable queue UUID. Older unnamed queues require no migration
 
 ## LangGraph integration
 
-Both start endpoints accept an optional `modelSelection` object:
+Match, positional-run, and queue start endpoints accept an optional `modelSelection` object:
 
 ```json
-{"modelId": "gpt-terra", "reasoningEffort": "medium"}
+{"modelId": "unsloth", "modelName": "Qwen_Qwen3-14B__project-test_train_set_1_1791485578", "reasoningEffort": "medium"}
 ```
 
-`modelId` is restricted to `qwen` or `gpt-terra`; the only selectable reasoning
-effort is `medium`. Omission keeps the existing LM Studio default. The backend
+`modelId` is restricted to `qwen` (LM Studio), `unsloth`, or `gpt-terra`; the only
+selectable reasoning effort is `medium`. Optional `modelName` pins the exact local
+model identifier; when omitted, the provider's configured model or only loaded
+model is resolved. Queues resolve and persist this identifier when created, so
+all positions use the same model. Missing or ambiguous models return 503.
+Omitting `modelSelection` keeps the existing LM Studio default. The backend
 maps `gpt-terra` to `gpt-5.6-terra`, resolves one client/configuration per run, and
 does not accept provider URLs or credentials from the browser. A match uses that
 selection for both players. Invalid selections return 422; missing GPT

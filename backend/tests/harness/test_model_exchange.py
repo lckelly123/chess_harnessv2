@@ -11,7 +11,7 @@ from openai import AsyncOpenAI
 
 from harness.baseline import BaselineAgent, BaselineConfig
 from harness.contracts import HarnessError
-from harness.model import LMStudioModel, NativeToolTurn, OpenAIModel
+from harness.model import LMStudioModel, NativeToolTurn, OpenAIModel, UnslothModel
 from harness.recording import complete_pass, current_recorder
 from positional_testing.exchange import output_blocks, present_exchange
 from positional_testing.recording import PassRecorder
@@ -67,7 +67,7 @@ async def invoke(model, **overrides):
     )
 
 
-@pytest.mark.parametrize("cls", [LMStudioModel, OpenAIModel])
+@pytest.mark.parametrize("cls", [LMStudioModel, OpenAIModel, UnslothModel])
 def test_snapshot_matches_wire_request_and_raw_returned_strings(cls, run_store):
     recorder = PassRecorder(run_store, str(uuid4()))
     arguments = ' \n{"running_thoughts": "unfinished 雪", "tool_calls": [ malformed\t '

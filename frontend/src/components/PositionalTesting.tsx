@@ -34,11 +34,12 @@ function titleCase(value: string) {
 
 interface PositionalTestingProps {
   modelSelection: ModelSelection;
+  modelReady: boolean;
   running: boolean;
   onRunningChange: (running: boolean) => void;
 }
 
-export function PositionalTesting({ modelSelection, running, onRunningChange }: PositionalTestingProps) {
+export function PositionalTesting({ modelSelection, modelReady, running, onRunningChange }: PositionalTestingProps) {
   const [positions, setPositions] = useState<PositionalTestPosition[]>([]);
   const [harnesses, setHarnesses] = useState<HarnessVersion[]>([]);
   const [selectedPositionId, setSelectedPositionId] = useState("");
@@ -137,7 +138,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
   };
 
   const runOnce = async () => {
-    if (!selectedPosition || !selectedHarness || running || queueActive) return;
+    if (!selectedPosition || !selectedHarness || running || queueActive || !modelReady) return;
     onRunningChange(true);
     setRunError(null);
     setRunResult(null);
@@ -200,7 +201,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
         <a href="#positional-run-history">View run history</a>
       </header>
 
-      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} singleRunning={running} onActiveChange={setQueueActive} onInspect={(positionId, runId) => {
+      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} modelReady={modelReady} singleRunning={running} onActiveChange={setQueueActive} onInspect={(positionId, runId) => {
         choosePosition(positionId);
         setInspectedRunId(runId ?? undefined);
         setHistoryRevision((value) => value + 1);
@@ -330,7 +331,7 @@ export function PositionalTesting({ modelSelection, running, onRunningChange }: 
                     <button
                       className="positional-runbar__button"
                       type="button"
-                      disabled={running || queueActive || !selectedHarness || harnessLoading || !!harnessError || missingHarnesses.length > 0}
+                      disabled={running || queueActive || !modelReady || !selectedHarness || harnessLoading || !!harnessError || missingHarnesses.length > 0}
                       aria-busy={running}
                       onClick={() => void runOnce()}
                     >
