@@ -12,7 +12,7 @@ const appUrl = process.argv[2] ?? "http://127.0.0.1:5174";
 const directory = resolve("..", ".impeccable", "review");
 mkdirSync(directory, { recursive: true });
 const checkpoint = "Qwen_Qwen3-14B__project-test_train_set_1_1791485578";
-const harnesses = ["Baseline", "Agent Player 1", "Agent Player 2", "Agent Player 3"].map((name, i) => ({
+const harnesses = ["Baseline", "legacy", "chess_harness", "chess_charness_alt"].map((name, i) => ({
   id: i === 0 ? "baseline-direct-submit-langgraph-v1" : `agent-player-${i}-langgraph-v1`,
   name, version: "v1", summary: "Synthetic harness for interface verification.",
 }));

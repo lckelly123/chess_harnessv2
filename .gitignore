@@ -19,3 +19,4 @@ backend/data/
 *.sqlite3-wal
 .impeccable/review/
 .impeccable/config.local.json
+.runtime/

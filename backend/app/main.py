@@ -8,6 +8,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from codex_training.job_routes import router as codex_jobs_router
+from codex_training.jobs import WorkerJobs
+from codex_training.routes import router as codex_training_router
+from codex_training.service import CodexTrainingService
 from harness.model import LMStudioModel, OpenAIModel, UnslothModel
 from positional_testing.queue import PositionQueueManager
 from positional_testing.routes import router as positional_testing_router
@@ -51,6 +55,14 @@ def create_app(
         manager = MatchManager(active_repository, active_catalog, configured_settings)
         app.state.match_manager = manager
         app.state.positional_test_runner = PositionalTestRunner(active_catalog)
+        codex_training = CodexTrainingService(
+            app.state.positional_test_runner.repository,
+            app.state.positional_test_runner.evaluator,
+        )
+        app.state.codex_training = codex_training
+        codex_jobs = WorkerJobs(codex_training)
+        app.state.codex_jobs = codex_jobs
+        codex_jobs.start()
         queue_manager = PositionQueueManager(
             app.state.positional_test_runner, active_catalog
         )
@@ -59,6 +71,8 @@ def create_app(
         try:
             yield
         finally:
+            await codex_jobs.close()
+            await codex_training.close()
             await queue_manager.close()
             await manager.close()
             if model_client is not None:
@@ -78,6 +92,8 @@ def create_app(
     )
     application.include_router(router)
     application.include_router(positional_testing_router)
+    application.include_router(codex_training_router)
+    application.include_router(codex_jobs_router)
     return application
 
 

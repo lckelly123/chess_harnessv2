@@ -61,14 +61,14 @@ save the exact model identifier for every position in the set.
 - **LM Studio** lists its loaded language models. It remains the default when an
   older API client omits `modelSelection` (the API identifier remains `qwen`).
 - **Unsloth** lists loaded checkpoints, including fine-tuned adapters. Choose
-  Agent Player 2 and your fine-tuned checkpoint to use the existing prompts,
+  chess_harness and your fine-tuned checkpoint to use the existing prompts,
   reasoning, tools, and raw exchange recording through Unsloth's `/v1/responses`.
   The local URL (`http://127.0.0.1:8888/v1`) and supplied access token are defaults
   in `backend/harness/model.py`. Docker uses `http://host.docker.internal:8888/v1`
   to reach the host. `UNSLOTH_BASE_URL` and `UNSLOTH_API_KEY` optionally override
   those defaults; `UNSLOTH_MODEL` pins a checkpoint for API clients that omit
   `modelName`. Credentials stay in the backend. Load this training checkpoint
-  with at least 8192 context tokens to fit the full Agent Player 2 prompts.
+  with at least 8192 context tokens to fit the full chess_harness prompts.
   Unsloth calls allow 600 seconds for local generation; override with
   `UNSLOTH_TIMEOUT_SECONDS` if needed.
 - **OpenAI** uses GPT Terra (`gpt-5.6-terra`) with medium reasoning. Set
@@ -90,6 +90,16 @@ LangSmith model spans and graph metadata identify the resolved model and
 provider. Detailed graph state remains separate from the public result. CLI and
 LangGraph Studio entrypoints retain their existing LM Studio defaults.
 
+### Codex training
+
+Select **Codex (training)** in **Positional testing** to run the existing
+`chess_harness` with a Codex teacher. Start the Windows worker with
+`.\scripts\start-codex-worker.ps1` after the [one-time setup](docs/codex-mcp.md).
+It uses your saved Codex sign-in and configured model, starts fresh context for
+each pass, and submits through stdio MCP. The normal run history stores exact
+harness inputs, authored explanations, working notes, tool calls, and final
+engine grades. The UI shows live progress and offers **Stop Codex**.
+
 ## Repository shape
 
 ```text
@@ -98,6 +108,7 @@ backend/
   chess_core/          Deterministic position, scratchboard, inspection, and SEE logic
   harness/             Independent agent_player_1 and baseline graphs; shared transport/protocol
   positional_testing/  PostgreSQL position library, curation, and one-turn runner
+  codex_training/      Teacher prompt, stdio MCP adapter, and Windows Codex worker
   tests/               API, chess-core, graph, prompt-parity, and tracing tests
   Dockerfile           Python development and production stages
 frontend/
@@ -112,7 +123,7 @@ PRODUCT.md              Product truth and scope
 
 The development images include the language runtime, installed dependencies, and application source. The frontend production stage contains only Nginx, its config, and the compiled `dist/` output; it does not ship Node.js or source dependencies. The backend production stage contains Python, installed runtime packages, `backend/app`, `backend/chess_core`, `backend/harness` (including its prompts), and `backend/positional_testing` (including the frozen position dataset). Test tooling stays in the test stage. Git history, local virtual environments, test caches, frontend `node_modules`, and secrets are excluded.
 
-## Agent Player 1
+## legacy (formerly Agent Player 1)
 
 Run a scripted turn without model calls or trace uploads:
 
@@ -127,7 +138,7 @@ docker compose run --rm --no-deps -e LANGSMITH_TRACING=false backend python -m h
 ```
 
 For a live run, configure LM Studio and optional LangSmith credentials using
-[.env.example](.env.example). See [Agent Player 1 setup and migration
+[.env.example](.env.example). See [legacy setup and migration
 notes](docs/agent-player-1.md). The web stack calls an agent only after a match is
 started or a saved positional test is explicitly run through the UI or API.
 
@@ -170,7 +181,11 @@ filters** includes dataset version, source, puzzle theme, and puzzle-rating band
 search matches opening names, themes, and IDs. Rows and the selected board show
 the position's tags, source, and rating when available.
 
-Select a position, choose Baseline or Agent Player 1, 2, or 3, and click **Run once**.
+Select a position, choose Baseline, legacy, chess_harness, or chess_charness_alt,
+and click **Run once**. The three renamed harnesses retain their existing version
+IDs and Python module paths. Database initialization updates the saved names in
+match history and positional runs, including queue labels, while preserving
+recorded model inputs and outputs.
 The backend loads and validates that row's PGN history, asks the harness for one legal move, and returns
 its proposed move, resolved model, justification, and any available phase reports
 without creating a match or changing the library. Ratings, themes, classifications,

@@ -32,7 +32,7 @@ const makeRun = (index) => ({
 let runs = Array.from({ length: 32 }, (_, index) => makeRun(index));
 let matches = [1, 2].map((index) => ({
   id: `match-fixture-${index}`, white: { harnessId: "baseline", name: "Baseline", version: "v1", color: "white" },
-  black: { harnessId: "agent-3", name: "Agent Player 3", version: "v3", color: "black" },
+  black: { harnessId: "agent-3", name: "chess_charness_alt", version: "v3", color: "black" },
   status: "stopped", result: "aborted", startedAt: createdAt, endedAt: createdAt,
   currentFen: fen, moveCount: 0, lastMove: null, currentPlayer: null, currentPhase: null,
   terminationReason: "Stopped", folder: null,

@@ -5,8 +5,64 @@ from app.matches.repository import (
     MatchRepository,
     UnknownFolderError,
 )
+from app.models import HarnessVersion
 from chess_core import STARTING_FEN, apply_move
 from harness.contracts import MoveDecision
+
+
+@pytest.mark.parametrize(
+    ("harness_id", "old_name", "name"),
+    [
+        ("agent-player-1-langgraph-v1", "Agent Player 1", "legacy"),
+        ("agent-player-2-langgraph-v1", "Agent Player 2", "chess_harness"),
+        ("agent-player-3-langgraph-v1", "Agent Player 3", "chess_charness_alt"),
+        ("custom-harness", "Agent Player 2", "Agent Player 2"),
+    ],
+)
+def test_saved_harness_names_migrate_without_changing_replay(
+    database_path, harness_id, old_name, name
+):
+    definition = HarnessVersion(
+        id=harness_id, name=old_name, version="original-version", summary="Fixture"
+    )
+    repository = MatchRepository(str(database_path))
+    repository.create_match("historical", definition, definition)
+    repository.set_turn("historical", "white", 1, old_name)
+    move = apply_move(STARTING_FEN, "e4")
+    repository.append_move_if_running(
+        "historical",
+        ply=1,
+        player="white",
+        move=move.move,
+        fen_after=move.fen_after,
+        decision=MoveDecision(
+            move=move.move, justification=f"{old_name}: original output"
+        ),
+    )
+    repository.set_turn("historical", "black", 2, old_name)
+    before = repository.get_match("historical")
+    repository.close()
+
+    for _ in range(2):
+        reopened = MatchRepository(str(database_path))
+        try:
+            after = reopened.get_match("historical")
+            assert after.white.name == after.black.name == name
+            assert after.white.harness_id == after.black.harness_id == harness_id
+            assert after.white.version == after.black.version == "original-version"
+            assert after.positions == before.positions
+            assert after.current_fen == before.current_fen
+            assert after.status == before.status
+            assert [event.detail for event in after.traces] == [
+                event.detail for event in before.traces
+            ]
+            assert {event.summary for event in after.traces} == {
+                f"{name} is choosing a move",
+                f"{name} played e4",
+            }
+            assert reopened.list_matches(name).total == 1
+        finally:
+            reopened.close()
 
 
 def test_persists_replay_and_search(database_path, harnesses) -> None:

@@ -47,6 +47,8 @@ class PositionalTestRunner:
         model_selection: ModelSelection | None = None,
         *,
         queued_run_id: str | None = None,
+        config_metadata: dict | None = None,
+        cancellation_check: Callable[[], bool] | None = None,
     ) -> SavedPositionRun:
         document = await run_in_threadpool(get_saved_position, position_id)
         if document is None:
@@ -56,6 +58,7 @@ class PositionalTestRunner:
         position = document.position
         run_id = queued_run_id or self._id_factory()
         config = {
+            **(config_metadata or {}),
             "harness_name": definition.name,
             "harness_version": definition.version,
         }
@@ -86,7 +89,7 @@ class PositionalTestRunner:
         try:
             player, model_name = await self._catalog.create_player(
                 harness_id,
-                lambda: False,
+                cancellation_check or (lambda: False),
                 model_selection=model_selection,
             )
             settings = getattr(player, "config", None)

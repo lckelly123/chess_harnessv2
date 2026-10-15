@@ -11,11 +11,11 @@ class AgentConfig:
     retry_reasoning_effort: str = "none"
     max_output_tokens: int = 2000
     retry_max_output_tokens: int = 600
-    max_tool_calls: int = 30
+    max_tool_calls: int = 100
     max_failed_tool_calls: int = 3
     max_protocol_retries: int = 20
     max_forced_retries: int = 3
-    max_model_calls: int = 80
+    max_model_calls: int = 100
     history_event_limit: int = 7  # Current legacy runtime default (not its older docs).
     prompt_version: str = "agent-player-2-langgraph-v1"
     provider: str = "lmstudio"

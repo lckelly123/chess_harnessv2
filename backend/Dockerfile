@@ -23,10 +23,12 @@ COPY app ./app
 COPY chess_core ./chess_core
 COPY harness ./harness
 COPY positional_testing ./positional_testing
+COPY codex_training ./codex_training
 
 FROM base AS test
 COPY pyproject.toml .
 COPY requirements-dev.txt .
+COPY requirements-mcp.txt .
 RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY tests ./tests
 CMD ["pytest", "-q"]

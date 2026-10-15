@@ -21,6 +21,7 @@ The first release is a React web interface served locally through Docker. It let
 - open and replay a completed match move by move;
 - browse Match library by Agent vs agent or Positional testing; order match records chronologically and filter saved positional attempts by queue, set, engine analysis/grade, dataset, harness, model, and status, with the saved board and trace beside the selected attempt;
 - filter the PostgreSQL position library by set, phase, type, side, dataset, source, theme, and puzzle rating; choose a harness and request one proposed move;
+- choose Codex (training) for an individual saved position, monitor its passes, and inspect the saved explanations, working notes, and tool calls;
 - run every position in a dataset's training or test set sequentially, monitor progress, and inspect saved results and failed attempts.
 
 Match history uses a local SQLite-backed runner; the curated training/test
@@ -33,18 +34,19 @@ run in the background.
 - The backend is authoritative for match state, legal moves, results, and traces.
 - The frontend never chooses chess moves and exposes no human move controls.
 - Public UI events summarize match progress; detailed graph execution remains in LangSmith.
-- Shared model controls apply to new matches, single-position tests, and full-set queues. Local starts require a selected loaded model; loading, connection errors, empty inventories, and unavailable selections are explained beside the controls, with refresh available to check the server again.
+- Shared model controls apply to new matches, standard single-position tests, and full-set queues. These local starts require a selected loaded model; loading, connection errors, empty inventories, and unavailable selections are explained beside the controls, with refresh available to check the server again. Codex (training) uses its connected Windows worker's model and reasoning effort independently of the shared selector; it does not require a loaded LM Studio or Unsloth model.
+- Codex (training) runs individual positions through the existing `chess_harness`, using the saved Codex sign-in and a fresh `codex exec` process per pass over stdio MCP. The UI shows worker readiness, model and effort, pass progress, and Stop Codex, and reattaches to an active job after reload. Full-set queues are unchanged, and runs do not automatically export JSONL. Setup and recovery details are in [docs/codex-mcp.md](docs/codex-mcp.md).
 - Positional-test attempts and per-pass working notes/tool results persist in PostgreSQL. They do not create a match record or mutate the saved PGN. Successful Stockfish evaluations record an expected-points-loss classification and all strictly better legal moves for future training. Grading failures retain the model trace and error; existing runs are not backfilled.
-- New positional passes also persist the actual provider request and raw response before validation. Expand leaves the pass summary intact and opens a Markdown reading view of Input and Output with a sticky Back arrow. Back, browser Back, or Escape returns to the same pass with its selection, filters, scroll, and focus preserved. Presentation does not change the saved exchange. Historical passes without captured input/output cannot be expanded.
+- New standard positional passes also persist the actual provider request and raw response before validation. Codex passes retain the exact harness input, teacher prompt, submitted response, and authored `reasoning_text` explanation in the same run history and exchange viewer. These explanations are authored training content, not captured private reasoning; the teacher's under-1,500-token instruction is prompt guidance rather than a hard tokenizer cap. Expand leaves the pass summary intact and opens a Markdown reading view of Input and Output with a sticky Back arrow. Back, browser Back, or Escape returns to the same pass with its selection, filters, scroll, and focus preserved. Presentation does not change the saved exchange. Historical passes without captured input/output cannot be expanded.
 - Full-set queues capture their dataset, split, harness, model selection (including the selected local checkpoint), and position membership when created, regardless of library filters. One queue runs at a time, completing each model turn and evaluation before the next position. Execution, validation, evaluation, and timeout failures are flagged in PostgreSQL and the queue continues. Closing the browser does not stop it; a backend restart resumes pending positions without replaying interrupted attempts.
 - Training and test queues can have an optional name for organization. Names appear in queue progress, recent queues, run history, and Match Library filters/search; the queue UUID remains its identity, including when names are reused.
 - The first release stays deliberately small: no authentication, tournaments, agent configuration editor, or trace mutation.
 - Harness selections are versioned identifiers, not editable prompts.
-- Stopping a match ends the active local match. Stopping a queue lets the current position finish and marks the remaining positions skipped; saved results remain available.
+- Stopping a match ends the active local match. Stopping a queue lets the current position finish and marks the remaining positions skipped; saved results remain available. Stop Codex terminates the active investigation and child process while retaining saved passes; a validated move already being graded may finish grading. Codex sessions do not resume after a backend restart.
 
 ## Information contract
 
-The frontend needs eight backend-facing resources:
+The frontend needs nine backend-facing resources:
 
 1. **Harness versions** — stable id, display name, version, and short description.
 2. **Game folders** — stable id, user-defined name, and match count for durable organization.
@@ -54,6 +56,7 @@ The frontend needs eight backend-facing resources:
 6. **Positional tests** — PostgreSQL exercise summaries with visible/filterable classifiers, a one-turn command, and saved attempts with the selected harness, resolved model, proposed legal move, emitted notes/tool results, and evaluation. Engine references and exercise classifications stay out of model inputs.
 7. **Full-set queues** — start/stop commands and durable snapshots containing captured configuration, progress counts, ordered position statuses, failure details, and links to saved attempts.
 8. **Loaded models** — the selected local server and its loaded checkpoint IDs, with refresh and explicit error handling so runs use an available model.
+9. **Codex worker and jobs** — worker readiness, model, reasoning effort, and active run id; start/stop commands and polled job snapshots containing position/run ids, status, pass number, progress, stopping state, errors, and the normal positional-test result. These resources support one worker and one active UI-created Codex run at a time.
 
 Every trace event has a stable id, timestamp, ply, player, phase, status, short summary, and optional structured detail. The browser may format and filter these fields, but it does not infer hidden backend state.
 

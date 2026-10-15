@@ -12,6 +12,8 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from harness.names import HARNESS_NAMES
+
 from .validation import load_collection, load_evaluations
 
 SCHEMA = Path(__file__).with_name("schema.sql")
@@ -60,6 +62,13 @@ def ensure_schema(conn) -> None:
     if legacy:
         conn.execute(MIGRATION.read_text(encoding="utf-8"))
     conn.execute(SCHEMA.read_text(encoding="utf-8"))
+    # Queue labels are projected from the same run config, so both histories update.
+    for harness_id, name in HARNESS_NAMES.items():
+        conn.execute(
+            "UPDATE model_runs SET config = jsonb_set(config, '{harness_name}', %s) "
+            "WHERE harness = %s AND config->>'harness_name' IS DISTINCT FROM %s",
+            (Jsonb(name), harness_id, name),
+        )
 
 
 def projection(*, summary=False) -> str:

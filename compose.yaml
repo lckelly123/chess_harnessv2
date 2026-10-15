@@ -43,6 +43,7 @@ services:
       LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID:-}
       MATCH_DATABASE_PATH: ${MATCH_DATABASE_PATH:-/app/data/chess-harness.sqlite3}
       MATCH_MAX_ACTIVE: ${MATCH_MAX_ACTIVE:-1}
+      CODEX_WORKER_TOKEN_FILE: /app/codex_runtime/worker.token
       POSITIONS_DB_HOST: positions_db
       POSITIONS_DB_PORT: 5432
       POSITIONS_DB_NAME: ${POSITIONS_DB_NAME:-chess_positions}
@@ -57,6 +58,8 @@ services:
       - ./backend/chess_core:/app/chess_core
       - ./backend/harness:/app/harness
       - ./backend/positional_testing:/app/positional_testing
+      - ./backend/codex_training:/app/codex_training
+      - ./.runtime:/app/codex_runtime:ro
       - backend_data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]

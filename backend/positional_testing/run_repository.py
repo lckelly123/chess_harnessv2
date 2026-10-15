@@ -94,6 +94,26 @@ class RunRepository:
                 (model, Jsonb(config), run_id),
             )
 
+    def recover_codex_training(self):
+        """An external session cannot resume after its owning backend has exited."""
+        error = "Codex bridge backend restarted before the run finished."
+        with self.connection() as conn:
+            lock_state(conn)
+            rows = conn.execute(
+                "UPDATE model_runs SET status = 'failed', error = %s, "
+                "failure_stage = CASE WHEN final_move_uci IS NULL "
+                "THEN 'execution' ELSE 'evaluation' END, finished_at = now() "
+                "WHERE status = 'running' AND config->>'provider' = 'codex_mcp' "
+                "RETURNING id",
+                (error,),
+            ).fetchall()
+            for row in rows:
+                conn.execute(
+                    "UPDATE model_run_passes SET status = 'failed', error = %s, "
+                    "finished_at = now() WHERE run_id = %s AND status = 'running'",
+                    (error, row["id"]),
+                )
+
     def finish(self, run_id, *, move=None, error=None, grade=None):
         grade = grade or {}
         failure_stage = "execution" if error else None

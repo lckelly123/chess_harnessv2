@@ -5,9 +5,12 @@ import {
   LoaderCircle,
   Play,
   RotateCcw,
+  Square,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { matchApi } from "../api/client";
+import { ApiError, matchApi } from "../api/client";
+import { CODEX_TRAINING_ID, codexApi, type CodexJob, type CodexWorkerStatus } from "../api/codex";
+import { CodexTrainingChoice } from "./CodexTrainingChoice";
 import type {
   HarnessVersion,
   ModelSelection,
@@ -23,9 +26,9 @@ import { PositionQueue } from "./PositionQueue";
 
 const POSITIONAL_HARNESSES = [
   { id: "baseline-direct-submit-langgraph-v1", name: "Baseline" },
-  { id: "agent-player-1-langgraph-v1", name: "Agent Player 1" },
-  { id: "agent-player-2-langgraph-v1", name: "Agent Player 2" },
-  { id: "agent-player-3-langgraph-v1", name: "Agent Player 3" },
+  { id: "agent-player-1-langgraph-v1", name: "legacy" },
+  { id: "agent-player-2-langgraph-v1", name: "chess_harness" },
+  { id: "agent-player-3-langgraph-v1", name: "chess_charness_alt" },
 ];
 
 function titleCase(value: string) {
@@ -53,6 +56,69 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   const [runResult, setRunResult] = useState<PositionalTestRun | null>(null);
   const [queueActive, setQueueActive] = useState(false);
   const [inspectedRunId, setInspectedRunId] = useState<string | undefined>();
+  const [codexWorker, setCodexWorker] = useState<CodexWorkerStatus | null>(null);
+  const [codexRunId, setCodexRunId] = useState<string | null>(null);
+  const [codexJob, setCodexJob] = useState<CodexJob | null>(null);
+  const [codexConnectionError, setCodexConnectionError] = useState<string | null>(null);
+  const isCodex = selectedHarnessId === CODEX_TRAINING_ID;
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const worker = await codexApi.worker();
+        if (cancelled) return;
+        setCodexWorker(worker);
+        if (worker.active_run_id) setCodexRunId((current) => current ?? worker.active_run_id);
+      } catch {
+        if (!cancelled) setCodexWorker(null);
+      } finally {
+        if (!cancelled) timer = setTimeout(() => void poll(), 3000);
+      }
+    };
+    void poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
+
+  useEffect(() => {
+    if (!codexRunId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const job = await codexApi.job(codexRunId);
+        if (cancelled) return;
+        setCodexJob(job);
+        setCodexConnectionError(null);
+        setSelectedPositionId(job.position_id);
+        setSelectedHarnessId(CODEX_TRAINING_ID);
+        setInspectedRunId(job.run_id);
+        if (["completed", "failed", "cancelled"].includes(job.status)) {
+          setRunResult(job.result);
+          setRunError(job.error);
+          setCodexRunId(null);
+          setHistoryRevision((value) => value + 1);
+          onRunningChange(false);
+          return;
+        }
+        onRunningChange(true);
+      } catch (caught) {
+        if (cancelled) return;
+        if (caught instanceof ApiError && caught.status === 404) {
+          setRunError("The live Codex session ended after a backend restart. Open run history for the saved passes.");
+          setCodexRunId(null);
+          setHistoryRevision((value) => value + 1);
+          onRunningChange(false);
+          return;
+        }
+        setCodexConnectionError("Connection interrupted. Reconnecting to the Codex run…");
+      }
+      if (!cancelled) timer = setTimeout(() => void poll(), 1500);
+    };
+    void poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [codexRunId, onRunningChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +170,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
     ({ id }) => !availableHarnesses.some((harness) => harness.id === id),
   );
 
-  const selectedHarness = availableHarnesses.find(
+  const selectedHarness = isCodex ? { id: CODEX_TRAINING_ID, name: "Codex (training)" } : availableHarnesses.find(
     (harness) => harness.id === selectedHarnessId,
   );
 
@@ -124,6 +190,8 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
     setInspectedRunId(undefined);
     setRunError(null);
     setRunResult(null);
+    setCodexJob(null);
+    setCodexConnectionError(null);
   };
 
   const choosePosition = (positionId: string) => {
@@ -138,10 +206,24 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   };
 
   const runOnce = async () => {
-    if (!selectedPosition || !selectedHarness || running || queueActive || !modelReady) return;
+    if (!selectedPosition || !selectedHarness || running || queueActive || !(isCodex ? codexWorker?.online : modelReady)) return;
     onRunningChange(true);
     setRunError(null);
     setRunResult(null);
+    if (isCodex) {
+      setCodexJob(null);
+      try {
+        const job = await codexApi.start(selectedPosition.id);
+        setCodexJob(job);
+        setCodexRunId(job.run_id);
+        setInspectedRunId(job.run_id);
+        setHistoryRevision((value) => value + 1);
+      } catch (caught) {
+        setRunError(caught instanceof Error ? caught.message : "Codex could not be started.");
+        onRunningChange(false);
+      }
+      return;
+    }
     try {
       const result = await matchApi.runPositionalTest({
         positionId: selectedPosition.id,
@@ -155,6 +237,12 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
       setHistoryRevision((value) => value + 1);
       onRunningChange(false);
     }
+  };
+
+  const stopCodex = async () => {
+    if (!codexRunId) return;
+    try { setCodexJob(await codexApi.stop(codexRunId)); }
+    catch (caught) { setCodexConnectionError(caught instanceof Error ? caught.message : "Could not stop Codex. Try Stop again."); }
   };
 
   const retryPositions = async () => {
@@ -183,7 +271,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
     try {
       const response = await matchApi.listHarnesses();
       setHarnesses(response);
-      if (!response.some((harness) => harness.id === selectedHarnessId)) {
+      if (selectedHarnessId !== CODEX_TRAINING_ID && !response.some((harness) => harness.id === selectedHarnessId)) {
         setSelectedHarnessId("");
         clearRun();
       }
@@ -304,6 +392,8 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                         })}
                       </div>
                     )}
+                    <CodexTrainingChoice selected={isCodex} disabled={running} worker={codexWorker}
+                      onSelect={() => chooseHarness(CODEX_TRAINING_ID)} />
                   </fieldset>
 
                   <div className="positional-runbar">
@@ -318,20 +408,20 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                       <span>
                         <strong>
                           {running
-                            ? "Running one turn"
+                            ? isCodex ? codexJob?.stopping ? "Stopping Codex" : `Codex · pass ${codexJob?.pass_number ?? 1}` : "Running one turn"
                             : runResult
                               ? `Move ${runResult.move.san} proposed`
                               : selectedHarness
                                 ? `${selectedHarness.name} selected`
                                 : "Select a harness to begin"}
                         </strong>
-                        <small>{running ? "Waiting for the model. This can take a few minutes." : queueActive ? "A full queue is active. Single runs are available when it finishes." : "Your saved position stays unchanged."}</small>
+                        <small>{running ? isCodex ? codexJob?.progress ?? "Starting Codex…" : "Waiting for the model. This can take a few minutes." : queueActive ? "A full queue is active. Single runs are available when it finishes." : isCodex && !codexWorker?.online ? "Connect the Windows worker to run this position." : "Your saved position stays unchanged."}</small>
                       </span>
                     </div>
                     <button
                       className="positional-runbar__button"
                       type="button"
-                      disabled={running || queueActive || !modelReady || !selectedHarness || harnessLoading || !!harnessError || missingHarnesses.length > 0}
+                      disabled={running || queueActive || !selectedHarness || (isCodex ? !codexWorker?.online : !modelReady || harnessLoading || !!harnessError || missingHarnesses.length > 0)}
                       aria-busy={running}
                       onClick={() => void runOnce()}
                     >
@@ -341,14 +431,17 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                         <><Play size={15} fill="currentColor" aria-hidden="true" /> {runError ? "Try again" : runResult ? "Run again" : "Run once"}</>
                       )}
                     </button>
+                    {isCodex && running && codexRunId ? <button className="codex-stop" type="button" disabled={codexJob?.stopping} onClick={() => void stopCodex()}><Square size={14} aria-hidden="true" />{codexJob?.stopping ? "Stopping…" : "Stop Codex"}</button> : null}
                   </div>
+
+                  {codexConnectionError && isCodex ? <p className="run-failure" role="alert">{codexConnectionError}</p> : null}
 
                   {runError ? (
                     <div className="positional-run-error" role="alert">
                       <AlertTriangle size={18} aria-hidden="true" />
                       <span>
-                        <strong>The agent did not return a move.</strong>
-                        <small>{runError} Check the selected model connection, then try again.</small>
+                        <strong>{runResult ? "Move saved; grading did not complete." : codexJob?.status === "cancelled" ? "Codex run stopped." : "The agent did not return a move."}</strong>
+                        <small>{runError}{isCodex ? " Saved passes are available in run history." : " Check the selected model connection, then try again."}</small>
                       </span>
                     </div>
                   ) : null}

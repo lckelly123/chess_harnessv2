@@ -98,6 +98,12 @@ def test_real_api_contract_and_stop(database_path) -> None:
                 AGENT_PLAYER_2_ID,
                 AGENT_PLAYER_3_ID,
             }
+            assert [item["name"] for item in harnesses.json()] == [
+                "Baseline",
+                "legacy",
+                "chess_harness",
+                "chess_charness_alt",
+            ]
 
             positions = client.get("/api/positional-testing/positions")
             assert positions.status_code == 200
@@ -119,7 +125,7 @@ def test_real_api_contract_and_stop(database_path) -> None:
             )
             assert run.status_code == 200
             assert run.json()["positionId"] == "5448280b-9d09-5211-97d3-ff1376d90797"
-            assert run.json()["harnessName"] == "Agent Player 1"
+            assert run.json()["harnessName"] == "legacy"
             assert run.json()["model"] == "scripted-model"
             assert run.json()["move"]["san"] == "e5"
             assert run.json()["attackReport"] == "The pawn attacks the knight."
@@ -167,7 +173,7 @@ def test_real_api_contract_and_stop(database_path) -> None:
             assert stopped.json()["result"] == "aborted"
             assert stopped.json()["terminationReason"] == "Stopped by the user."
 
-            search = client.get("/api/matches", params={"query": "Agent Player 1"})
+            search = client.get("/api/matches", params={"query": "legacy"})
             assert search.status_code == 200
             assert search.json()["total"] == 1
             assert search.json()["items"][0]["id"] == match_id

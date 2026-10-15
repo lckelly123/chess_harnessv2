@@ -102,7 +102,7 @@ try {
   await workspace.getByLabel("Phase", { exact: true }).selectOption("middlegame");
   await workspace.getByLabel("Position type", { exact: true }).selectOption("quiet");
   await workspace.getByLabel("Side to move", { exact: true }).selectOption("white");
-  await workspace.getByRole("radio", { name: /^Agent Player 3/ }).check();
+  await workspace.getByRole("radio", { name: /^chess_charness_alt/ }).check();
 
   for (const viewport of [{ name: "desktop", width: 1440, height: 1000 }, { name: "mobile", width: 390, height: 844 }]) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });

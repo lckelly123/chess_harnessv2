@@ -21,6 +21,7 @@ from harness.model import (
     resolve_lmstudio_model,
     resolve_unsloth_model,
 )
+from harness.names import HARNESS_NAMES
 
 BASELINE_ID = "baseline-direct-submit-langgraph-v1"
 AGENT_PLAYER_1_ID = "agent-player-1-langgraph-v1"
@@ -37,19 +38,19 @@ HARNESSES = (
     ),
     HarnessVersion(
         id=AGENT_PLAYER_1_ID,
-        name="Agent Player 1",
+        name=HARNESS_NAMES[AGENT_PLAYER_1_ID],
         version="agent-player-1-langgraph-v1",
         summary="Defense, attack, and synthesis phases with deterministic tools.",
     ),
     HarnessVersion(
         id=AGENT_PLAYER_2_ID,
-        name="Agent Player 2",
+        name=HARNESS_NAMES[AGENT_PLAYER_2_ID],
         version="agent-player-2-langgraph-v1",
         summary="Single synthesis phase with deterministic analysis tools.",
     ),
     HarnessVersion(
         id=AGENT_PLAYER_3_ID,
-        name="Agent Player 3",
+        name=HARNESS_NAMES[AGENT_PLAYER_3_ID],
         version=AGENT_PLAYER_3_ID,
         summary="Single synthesis phase with native Responses API tool calls.",
     ),
@@ -90,9 +91,11 @@ class HarnessCatalog:
         openai_model: Model | None = None,
         unsloth_model: Model | None = None,
         unsloth_resolver: Callable[[], Awaitable[str]] = resolve_unsloth_model,
+        model_provider: str = "lmstudio",
     ):
         self._model = model
         self._model_resolver = model_resolver
+        self._model_provider = model_provider
         self._openai_model = openai_model
         self._unsloth_model = unsloth_model
         self._unsloth_resolver = unsloth_resolver
@@ -173,7 +176,7 @@ class HarnessCatalog:
             client=self._model,
             name=(selection.model_name if selection else None)
             or await self._model_resolver(),
-            provider="lmstudio",
+            provider=self._model_provider,
             reasoning_effort=selection.reasoning_effort
             if selection is not None
             else os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),

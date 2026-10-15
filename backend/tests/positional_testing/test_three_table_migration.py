@@ -163,7 +163,9 @@ def test_migration_preserves_content_and_pending_queue_membership(
             )
         }
         assert tables == {"positions", "model_runs", "model_run_passes"}
-        assert conn.execute("SELECT * FROM model_run_passes").fetchall() == old_passes
+        assert conn.execute("SELECT * FROM model_run_passes").fetchall() == [
+            {**row, "model_input": None, "model_output": None} for row in old_passes
+        ]
         assert conn.execute("SELECT count(*) AS n FROM model_runs").fetchone()["n"] == 7
         new_positions = conn.execute("SELECT * FROM positions ORDER BY id").fetchall()
         for before, after in zip(old_positions, new_positions, strict=True):

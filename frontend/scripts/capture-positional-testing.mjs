@@ -21,9 +21,9 @@ const browser = await chromium.launch({ executablePath, headless: true });
 const runResponse = {
   runId: "positional-test-review",
   positionId: "before_queen_blunder",
-  positionName: "Agent Player 1 Queen Blunder Test",
+  positionName: "legacy Queen Blunder Test",
   harnessId: "agent-player-1-langgraph-v1",
-  harnessName: "Agent Player 1",
+  harnessName: "legacy",
   harnessVersion: "agent-player-1-langgraph-v1",
   model: "qwen3-30b-a3b-instruct-2507",
   side: "black",
@@ -60,14 +60,14 @@ for (const viewport of [
   });
   await page.goto(appUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Positional testing" }).click();
-  await page.getByRole("button", { name: /Agent Player 1 Queen Blunder Test/ }).click();
+  await page.getByRole("button", { name: /legacy Queen Blunder Test/ }).click();
 
   const baseline = page.locator('input[value="baseline-direct-submit-langgraph-v1"]');
   const agentPlayer = page.locator('input[value="agent-player-1-langgraph-v1"]');
   await baseline.check();
   if (!(await baseline.isChecked())) throw new Error("Baseline selection did not persist.");
   await agentPlayer.check();
-  if (!(await agentPlayer.isChecked())) throw new Error("Agent Player 1 selection did not persist.");
+  if (!(await agentPlayer.isChecked())) throw new Error("legacy selection did not persist.");
   await page.getByRole("button", { name: "Run once" }).click();
   if (viewport.name === "positional-desktop") {
     await page.getByRole("button", { name: "Match desk" }).click();
@@ -100,7 +100,7 @@ await unavailablePage.route("**/api/harnesses", (route) =>
 );
 await unavailablePage.goto(appUrl, { waitUntil: "networkidle" });
 await unavailablePage.getByRole("button", { name: "Positional testing" }).click();
-await unavailablePage.getByRole("button", { name: /Agent Player 1 Queen Blunder Test/ }).click();
+await unavailablePage.getByRole("button", { name: /legacy Queen Blunder Test/ }).click();
 await unavailablePage.getByText("Harness choices unavailable.").waitFor();
 await unavailablePage.getByRole("button", { name: "Retry" }).waitFor();
 await unavailablePage.locator(".agent-picker").screenshot({
@@ -125,9 +125,9 @@ await missingHarnessPage.route("**/api/harnesses", (route) =>
 );
 await missingHarnessPage.goto(appUrl, { waitUntil: "networkidle" });
 await missingHarnessPage.getByRole("button", { name: "Positional testing" }).click();
-await missingHarnessPage.getByRole("button", { name: /Agent Player 1 Queen Blunder Test/ }).click();
+await missingHarnessPage.getByRole("button", { name: /legacy Queen Blunder Test/ }).click();
 await missingHarnessPage.getByText("Expected harness missing.").waitFor();
-await missingHarnessPage.getByText(/Agent Player 1/).last().waitFor();
+await missingHarnessPage.getByText(/legacy/).last().waitFor();
 await missingHarnessPage.getByRole("button", { name: "Reload harnesses" }).waitFor();
 await missingHarnessPage.locator(".agent-picker").screenshot({
   path: resolve(reviewDirectory, "positional-mobile-missing-model.png"),
@@ -145,7 +145,7 @@ await runErrorPage.route("**/api/positional-testing/runs", (route) =>
 );
 await runErrorPage.goto(appUrl, { waitUntil: "networkidle" });
 await runErrorPage.getByRole("button", { name: "Positional testing" }).click();
-await runErrorPage.getByRole("button", { name: /Agent Player 1 Queen Blunder Test/ }).click();
+await runErrorPage.getByRole("button", { name: /legacy Queen Blunder Test/ }).click();
 await runErrorPage.locator('input[value="agent-player-1-langgraph-v1"]').check();
 await runErrorPage.getByRole("button", { name: "Run once" }).click();
 await runErrorPage.getByText("The agent did not return a move.").waitFor();

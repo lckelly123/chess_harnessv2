@@ -491,7 +491,7 @@ def test_positional_api_runs_registered_native_player(database_path, library_row
                 for harness in client.get("/api/harnesses").json()
                 if harness["id"] == AGENT_PLAYER_3_ID
             )
-            assert definition["name"] == "Agent Player 3"
+            assert definition["name"] == "chess_charness_alt"
             response = client.post(
                 "/api/positional-testing/runs",
                 json={
@@ -505,7 +505,7 @@ def test_positional_api_runs_registered_native_player(database_path, library_row
             )
             assert response.status_code == 200, response.text
             assert response.json()["harnessId"] == AGENT_PLAYER_3_ID
-            assert response.json()["harnessName"] == "Agent Player 3"
+            assert response.json()["harnessName"] == "chess_charness_alt"
             assert response.json()["model"] == GPT_TERRA_MODEL
             assert response.json()["move"]["san"] == "e5"
             assert len(cloud.calls) == 3

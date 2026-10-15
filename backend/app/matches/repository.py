@@ -22,6 +22,7 @@ from app.models import (
 )
 from chess_core import STARTING_FEN, MoveIdentity
 from harness.contracts import MoveDecision
+from harness.names import HARNESS_RENAMES
 
 
 def _now() -> datetime:
@@ -133,7 +134,32 @@ class MatchRepository:
         self._connection.execute(
             "CREATE INDEX IF NOT EXISTS matches_folder_id ON matches(folder_id)"
         )
+        self._rename_harnesses()
         self._connection.commit()
+
+    def _rename_harnesses(self) -> None:
+        """Refresh saved labels and generated event titles without changing replay."""
+        for harness_id, old_name, name in HARNESS_RENAMES:
+            for side in ("white", "black"):
+                self._connection.execute(
+                    f"UPDATE matches SET {side}_name = ? "
+                    f"WHERE {side}_harness_id = ? AND {side}_name != ?",
+                    (name, harness_id, name),
+                )
+                self._connection.execute(
+                    "UPDATE events SET summary = ? || substr(summary, ?) "
+                    "WHERE player = ? AND match_id IN "
+                    f"(SELECT id FROM matches WHERE {side}_harness_id = ?) "
+                    "AND (summary = ? OR summary LIKE ?)",
+                    (
+                        name,
+                        len(old_name) + 1,
+                        side,
+                        harness_id,
+                        f"{old_name} is choosing a move",
+                        f"{old_name} played %",
+                    ),
+                )
 
     def close(self) -> None:
         with self._lock:
