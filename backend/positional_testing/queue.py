@@ -90,10 +90,12 @@ class PositionQueueManager:
             raise UnknownQueueError("The original queue no longer exists.")
         if source["status"] not in {"completed", "stopped"}:
             raise QueueConflictError(
-                "Finish or stop the original queue before retrying its failures."
+                "Finish or stop the original queue before retrying its positions."
             )
-        if not source["failed"]:
-            raise EmptyPositionSetError("This queue has no failed positions to retry.")
+        if not (source["failed"] or source["skipped"]):
+            raise EmptyPositionSetError(
+                "This queue has no failed or skipped positions to retry."
+            )
         self.catalog.definition(source["harness_id"])
         if source["model_selection"]["model_id"] == "codex":
             self.ready_codex_worker()

@@ -143,7 +143,7 @@ class QueueRepository(RunRepository):
         return self.get_queue(queue_tag)
 
     def retry_failed(self, queue_tag):
-        """Replace failed entries atomically, retaining all earlier attempt traces."""
+        """Replace failed/skipped entries atomically, retaining earlier attempts."""
         with self.connection() as conn:
             lock_state(conn)
             if conn.execute(
@@ -161,12 +161,14 @@ class QueueRepository(RunRepository):
             ).fetchall()
             if not source:
                 raise UnknownQueueError("The original queue no longer exists.")
-            failed = [row for row in source if row["status"] == "failed"]
-            if not failed:
+            retryable = [
+                row for row in source if row["status"] in {"failed", "skipped"}
+            ]
+            if not retryable:
                 raise EmptyPositionSetError(
-                    "This queue has no failed positions to retry."
+                    "This queue has no failed or skipped positions to retry."
                 )
-            for row in failed:
+            for row in retryable:
                 replacement = uuid4()
                 old_config = row["config"]
                 # Copy queue identity/settings, not execution metadata from the old run.
@@ -197,7 +199,7 @@ class QueueRepository(RunRepository):
                         Jsonb(config),
                     ),
                 )
-            # Reopen the same queue. Completed and skipped attempts keep their results.
+            # Reopen the same queue. Completed attempts keep their results.
             conn.execute(
                 "UPDATE model_runs SET config = jsonb_set(config, "
                 "'{queue,stop_requested}', 'false'::jsonb) WHERE queue_tag = %s "

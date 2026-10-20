@@ -292,19 +292,21 @@ rows without replaying paid calls. Unqueued traces are outside this recovery.
 Closing the browser does not stop the worker; database outages pause consumption.
 
 Under **Retry a past queue**, choose an explicit **Past queue**, then click
-**Retry failed positions**. The selector lists finished or stopped queues containing
-failed runs, showing their names, failure counts, timestamps, and short IDs.
+**Retry unfinished positions**. The selector lists finished or stopped queues containing
+failed or skipped runs, showing their names, failed/skipped counts, timestamps, and short IDs.
 This selection is independent of **Recent queues**, which controls the results
 being viewed; browsing results or polling does not change the retry target.
 The retry action reopens that same queue, preserving its ID, name, position order,
-and saved harness/model selection. Only failed entries receive fresh run IDs;
-completed and skipped entries stay in place. Codex retries retain the original
+and saved harness/model selection. Failed and skipped entries receive fresh run IDs;
+completed entries stay in place. Codex retries retain the original
 model and reasoning effort and require an idle, connected Windows worker.
 
 Each retry starts the full position again, including model passes and grading;
 it does not resume partial passes or only repeat a failed evaluation. Completed
-runs (including blunders) and skipped positions are excluded. Earlier failed
-attempts and their passes remain in run history under the same queue tag.
+runs (including blunders) are excluded. Queues containing only skipped positions
+can also be retried. Earlier attempts and their passes remain in run history under
+the same queue tag. The existing `/retry-failed` API path covers both failed and
+skipped positions.
 `config.superseded_by_run_id` links an earlier attempt to its replacement, and
 `config.retry_of_run_id` links the replacement back. Queue counts and the positions
 list include only current attempts, so each position appears once even after

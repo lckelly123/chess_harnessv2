@@ -50,8 +50,8 @@ try {
         if (rejectRetry) { rejectRetry = false; return send({ detail: "Fixture unavailable. Try again." }, 503); }
         retries++;
         originalQueue = structuredClone(queue);
-        queue = { ...pastQueue, status: "running", pending: 2, failed: 0, finishedAt: null,
-          items: pastQueue.items.map((item, index) => item.status === "failed" ? { ...item, runId: uuid(3000 + index), status: "queued", error: null, failureStage: null, startedAt: null, finishedAt: null } : item) };
+        queue = { ...pastQueue, status: "running", pending: 2, failed: 0, skipped: 0, finishedAt: null,
+          items: pastQueue.items.map((item, index) => ["failed", "skipped"].includes(item.status) ? { ...item, runId: uuid(3000 + index), status: "queued", error: null, failureStage: null, startedAt: null, finishedAt: null } : item) };
         pastQueue = queue;
         return send(queue, 202);
       }
@@ -113,22 +113,28 @@ try {
     await section.getByRole("button", { name: "Stop after current", exact: true }).click();
     await section.getByRole("button", { name: "Stopping after current…", exact: true }).waitFor();
     queue.status = "stopped";
-    pastQueue = { ...structuredClone(queue), id: uuid(900), name: "Original training run · before the latest retry", status: "completed", completed: 1, failed: 2, skipped: 0,
+    // A stopped queue with no failures must also appear when its positions were skipped.
+    queue.failed = 0;
+    queue.skipped = 3;
+    queue.items.forEach((item) => { item.status = "skipped"; });
+    pastQueue = { ...structuredClone(queue), id: uuid(900), name: "Original training run · before the latest retry", status: "stopped", completed: 1, failed: 1, skipped: 1,
       createdAt: "2026-10-14T12:00:00Z", modelSelection: { modelId: "codex", modelName: "gpt-6-astra", reasoningEffort: "xhigh" },
-      items: queue.items.map((item, index) => ({ ...item, queueTag: uuid(900), runId: uuid(9000 + index), status: index === 1 ? "completed" : "failed", classification: index === 1 ? "blunder" : null })) };
+      items: queue.items.map((item, index) => ({ ...item, queueTag: uuid(900), runId: uuid(9000 + index), status: index === 1 ? "completed" : index === 0 ? "failed" : "skipped", classification: index === 1 ? "blunder" : null })) };
     const source = section.getByRole("combobox", { name: "Past queue", exact: true });
-    const retry = section.getByRole("button", { name: /Retry failed positions/ });
+    const retry = section.getByRole("button", { name: /Retry unfinished positions/ });
     await source.locator(`option[value="${uuid(900)}"]`).waitFor({ state: "attached" });
     assert.equal(await source.inputValue(), "", "No past queue is selected implicitly");
     assert.ok(await retry.isDisabled(), "A past queue must be explicitly selected");
     await source.selectOption(uuid(1000));
-    assert.match(await retry.textContent(), /1$/);
+    assert.match(await retry.textContent(), /3$/);
+    assert.match(await source.locator("option:checked").textContent(), /0 failed · 3 skipped/);
     assert.ok(await retry.isDisabled(), "Codex retry requires its worker, independently of the sidebar");
     await source.selectOption(uuid(900));
     assert.match(await retry.textContent(), /2$/);
+    assert.match(await source.locator("option:checked").textContent(), /1 failed · 1 skipped/);
     assert.equal(await section.getByLabel("Recent queues").inputValue(), uuid(1000), "Choosing a retry source does not change the displayed results");
     online = true;
-    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent.includes("Retry failed positions") && !button.disabled));
+    await page.waitForFunction(() => [...document.querySelectorAll("button")].some((button) => button.textContent.includes("Retry unfinished positions") && !button.disabled));
     await page.setViewportSize(viewport);
     await section.screenshot({ path: resolve(screenshots, `queue-retry-source-${viewport.name}.png`), animations: "disabled" });
     const originalSnapshot = structuredClone(queue);
@@ -148,7 +154,7 @@ try {
     assert.deepEqual(originalQueue, originalSnapshot);
     assert.deepEqual(queue.items[1], pastSnapshot.items[1], "Completed blunder is unchanged");
     assert.deepEqual(queue.modelSelection, pastSnapshot.modelSelection);
-    assert.deepEqual(queue.items.filter((item) => item.status === "queued").map((item) => item.positionId), [positions[0].id, positions[2].id], "Completed blunders are excluded");
+    assert.deepEqual(queue.items.filter((item) => item.status === "queued").map((item) => item.positionId), [positions[0].id, positions[2].id], "Failed and skipped positions restart; completed blunders are excluded");
     await section.screenshot({ path: resolve(screenshots, `queue-retry-source-result-${viewport.name}.png`), animations: "disabled" });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "Retry lineage fits the viewport");
     await section.getByLabel("Recent queues").selectOption(originalQueue.id);
@@ -175,5 +181,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log("Codex queue: readiness, start/reload/stop, explicit past-queue selection independent of displayed results, in-place failure-only retries, preserved successes and queue identity, source removal, duplicate prevention, desktop/mobile passed.");
+  console.log("Codex queue: readiness, start/reload/stop, explicit past-queue selection, skipped-only eligibility, failed/skipped retries in place, preserved successes and queue identity, source removal, duplicate prevention, desktop/mobile passed.");
 } finally { await browser.close(); }

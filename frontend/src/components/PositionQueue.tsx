@@ -50,7 +50,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
   const ready = isCodex ? !!codexWorker?.online && !codexWorker.active_run_id : modelReady;
   const validHarness = isCodex || harnesses.some((harness) => harness.id === harnessId);
   const nextModel = isCodex ? codexWorker?.online ? `Codex · ${codexWorker.model} · ${codexWorker.reasoning_effort} reasoning` : "Codex · Windows worker offline" : modelName(modelSelection);
-  const retrySources = queues.filter((item) => item.failed > 0 && ["completed", "stopped"].includes(item.status));
+  const retrySources = queues.filter((item) => item.failed + item.skipped > 0 && ["completed", "stopped"].includes(item.status));
   const retrySource = retrySources.find((item) => item.id === retrySourceId);
   const retryBlock = singleRunning ? "The single-position run must finish before retrying." : hasActive ? "Finish or stop the active queue and wait for its current position to finish before starting a retry." : retrySource?.modelSelection.modelId === "codex" ? !codexWorker?.online ? "Start the Windows Codex worker to retry these positions." : codexWorker.active_run_id ? "The Windows worker must finish its current run before retrying." : null : null;
 
@@ -117,7 +117,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
     }
   };
 
-  const retryFailed = async () => {
+  const retryUnfinished = async () => {
     if (!retrySource || retryBlock || loading || pending || error) return;
     setPending(true);
     setRetrying(true);
@@ -159,14 +159,14 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
       {loading ? <p role="status" className="position-queue__hint">Loading queues…</p> : null}
       {queues.length > 0 ? <section className="position-queue__retry" aria-labelledby={`${id}-retry-heading`}>
         <h3 id={`${id}-retry-heading`}>Retry a past queue</h3>
-        <form className="position-queue__retry-form" onSubmit={(event) => { event.preventDefault(); void retryFailed(); }}>
+        <form className="position-queue__retry-form" onSubmit={(event) => { event.preventDefault(); void retryUnfinished(); }}>
           <label className="field-control" htmlFor={`${id}-retry-source`}><span>Past queue</span><select id={`${id}-retry-source`} value={retrySource?.id ?? ""} disabled={loading || pending || !retrySources.length} aria-describedby={`${id}-retry-source-hint`} onChange={(event) => { setRetrySourceId(event.target.value); setCommandError(null); }}>
-            <option value="">{retrySources.length ? "Choose a queue to retry" : "No past queues with failed positions"}</option>
-            {retrySources.map((item) => <option key={item.id} value={item.id}>{item.name || `${setName(item.split)} set`} · {item.failed} failed · {new Date(item.createdAt).toLocaleString()} · {item.id.slice(0, 8)}</option>)}
+            <option value="">{retrySources.length ? "Choose a queue to retry" : "No past queues with failed or skipped positions"}</option>
+            {retrySources.map((item) => <option key={item.id} value={item.id}>{item.name || `${setName(item.split)} set`} · {item.failed} failed · {item.skipped} skipped · {new Date(item.createdAt).toLocaleString()} · {item.id.slice(0, 8)}</option>)}
           </select></label>
-          <button className="button button--secondary" type="submit" disabled={!retrySource || loading || !!error || pending || !!retryBlock} aria-describedby={`${id}-retry-source-hint ${id}-retry-hint`}><RotateCcw size={15} aria-hidden="true" />{retrying ? "Restarting failed positions…" : `Retry failed positions${retrySource ? ` · ${retrySource.failed}` : ""}`}</button>
+          <button className="button button--secondary" type="submit" disabled={!retrySource || loading || !!error || pending || !!retryBlock} aria-describedby={`${id}-retry-source-hint ${id}-retry-hint`}><RotateCcw size={15} aria-hidden="true" />{retrying ? "Restarting unfinished positions…" : `Retry unfinished positions${retrySource ? ` · ${retrySource.failed + retrySource.skipped}` : ""}`}</button>
         </form>
-        <p id={`${id}-retry-source-hint`} className="position-queue__hint" aria-live="polite">{retrySource ? <><strong>{retrySource.name || `${setName(retrySource.split)} set`}</strong> · {retrySource.harnessName} · {modelName(retrySource.modelSelection)}<br />Failed positions restart in this same queue using its saved settings. Completed and skipped positions stay as they are. Earlier attempts remain in run history.</> : retrySources.length ? "Choose the queue whose failed positions you want to run again. This choice is separate from the results shown below." : "Finished or stopped queues with failed positions will appear here."}</p>
+        <p id={`${id}-retry-source-hint`} className="position-queue__hint" aria-live="polite">{retrySource ? <><strong>{retrySource.name || `${setName(retrySource.split)} set`}</strong> · {retrySource.harnessName} · {modelName(retrySource.modelSelection)}<br />Failed and skipped positions restart in this same queue using its saved settings. Completed results stay as they are. Earlier attempts remain in run history.</> : retrySources.length ? "Choose the queue whose failed and skipped positions you want to run again. This choice is separate from the results shown below." : "Finished or stopped queues with failed or skipped positions will appear here."}</p>
         <p id={`${id}-retry-hint`} className="position-queue__hint" role="status">{retryBlock}</p>
       </section> : null}
       {queues.length > 0 ? <label className="field-control position-queue__history" htmlFor={`${id}-history`}><span>Recent queues</span><select id={`${id}-history`} value={selectedId || queues[0].id} onChange={(event) => { setSelectedId(event.target.value); setFailedOnly(false); }}>{queues.map((q) => <option key={q.id} value={q.id}>{q.name ? `${q.name} · ` : ""}{setName(q.split)} · {q.harnessName} · {new Date(q.createdAt).toLocaleString()} · {q.status} · {q.id.slice(0, 8)}</option>)}</select></label> : null}

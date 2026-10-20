@@ -136,7 +136,7 @@ async def queue_with_failures(manager, request):
 
 
 @pytest.mark.parametrize("codex", [False, True])
-def test_retry_only_failed_positions_in_place_preserves_traces_and_settings(
+def test_retry_failed_and_skipped_in_place_preserves_traces_and_settings(
     queue_env, codex
 ):
     manager, request = queue_env
@@ -162,9 +162,11 @@ def test_retry_only_failed_positions_in_place_preserves_traces_and_settings(
         source = await queue_with_failures(manager, request)
         source_runs = {
             item["run_id"]: manager.runner.repository.get(item["run_id"])
-            for item in source["items"][:4]
+            for item in source["items"][:5]
         }
-        failed = [item for item in source["items"] if item["status"] == "failed"]
+        retryable = [
+            item for item in source["items"] if item["status"] in {"failed", "skipped"}
+        ]
         if codex:
             jobs.seen -= 60
             with pytest.raises(QueueConflictError, match="Windows Codex worker"):
@@ -177,21 +179,21 @@ def test_retry_only_failed_positions_in_place_preserves_traces_and_settings(
         assert retried["name"] == source["name"]
         assert retried["created_at"] == source["created_at"]
         assert retried["total"] == source["total"] == 200
-        assert retried["pending"] == len(failed) == 3
-        assert retried["completed"] == 1 and retried["skipped"] == 196
+        assert retried["pending"] == len(retryable) == 199
+        assert retried["completed"] == 1 and retried["skipped"] == 0
         assert retried["failed"] == 0 and retried["finished_at"] is None
         replacements = [item for item in retried["items"] if item["status"] == "queued"]
         assert [item["position_id"] for item in retried["items"]] == [
             item["position_id"] for item in source["items"]
         ]
-        assert [item["ordinal"] for item in replacements] == [2, 3, 4]
+        assert [item["ordinal"] for item in replacements] == list(range(2, 201))
         assert [item for item in retried["items"] if item["status"] != "queued"] == [
-            item for item in source["items"] if item["status"] != "failed"
+            item for item in source["items"] if item["status"] == "completed"
         ]
         assert retried["model_selection"] == source["model_selection"]
         assert retried["harness_id"] == source["harness_id"]
         assert retried["split"] == source["split"]
-        for old, new in zip(failed, replacements, strict=True):
+        for old, new in zip(retryable, replacements, strict=True):
             stored = manager.runner.repository.get(new["run_id"])
             assert new["run_id"] != old["run_id"]
             assert stored["passes"] == [] and stored["evaluation"] is None
@@ -203,7 +205,7 @@ def test_retry_only_failed_positions_in_place_preserves_traces_and_settings(
                 k: v for k, v in before.items() if k != "config"
             }
         assert PositionQueueDetail.model_validate(retried).id == source["id"]
-        assert manager.runner.repository.list(queue_tag=retried["id"])[1] == 203
+        assert manager.runner.repository.list(queue_tag=retried["id"])[1] == 399
         assert len(manager.repository.list_queues()) == 1
         if not codex:
             await manager.execute_item(*manager.repository.claim_next())
@@ -230,13 +232,30 @@ def test_retry_queue_api_validates_source_state_and_returns_same_queue(queue_env
         path = prefix + str(first["id"]) + "/retry-failed"
         assert client.post(path).status_code == 409
         manager.repository.stop(first["id"])
-        assert client.post(path).status_code == 422
+        # A queue stopped before any attempt has only skipped positions and is retryable.
+        skipped = client.post(path)
+        assert skipped.status_code == 202, skipped.text
+        assert skipped.json()["id"] == str(first["id"])
+        assert skipped.json()["pending"] == 200
+        assert skipped.json()["failed"] == skipped.json()["skipped"] == 0
+        # Simulate every retry finishing successfully; a fully completed queue is excluded.
+        with manager.repository.connection() as conn:
+            conn.execute(
+                "UPDATE model_runs SET status = 'completed', finished_at = now(), "
+                'evaluation = \'{"status":"completed"}\'::jsonb '
+                "WHERE queue_tag = %s AND status = 'queued'",
+                (first["id"],),
+            )
+        completed = client.post(path)
+        assert completed.status_code == 422
+        assert "no failed or skipped positions" in completed.json()["detail"]
         source = asyncio.run(queue_with_failures(manager, request))
         path = prefix + str(source["id"]) + "/retry-failed"
         result = client.post(path)
         assert result.status_code == 202, result.text
         body = result.json()
-        assert body["total"] == 200 and body["pending"] == 3
+        assert body["total"] == 200 and body["pending"] == 199
+        assert body["completed"] == 1 and body["skipped"] == 0
         assert body["id"] == str(source["id"])
         assert body["name"] is None
         assert client.post(path).status_code == 409
@@ -244,7 +263,7 @@ def test_retry_queue_api_validates_source_state_and_returns_same_queue(queue_env
         assert len(manager.repository.list_queues()) == 2
 
 
-def test_concurrent_failure_retries_replace_failed_entries_only_once(queue_env):
+def test_concurrent_retries_replace_failed_and_skipped_entries_only_once(queue_env):
     manager, request = queue_env
     source = asyncio.run(queue_with_failures(manager, request))
 
@@ -257,11 +276,11 @@ def test_concurrent_failure_retries_replace_failed_entries_only_once(queue_env):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: retry(), range(2)))
     assert sum(result is not None for result in results) == 1
-    assert manager.runner.repository.list()[1] == 203
+    assert manager.runner.repository.list()[1] == 399
     assert len(manager.repository.list_queues()) == 1
 
 
-def test_repeated_retry_uses_latest_failures_without_duplicate_positions(queue_env):
+def test_repeated_retry_uses_latest_failed_and_skipped_attempts(queue_env):
     manager, request = queue_env
 
     async def run():
@@ -272,19 +291,26 @@ def test_repeated_retry_uses_latest_failures_without_duplicate_positions(queue_e
         manager.repository.finish_item(
             first_attempt, error="Failed again", failure_stage="execution"
         )
-        # Other failures now succeed, so only the newest failure is retried next time.
+        # Two retries succeed, then the rest are skipped when the queue is stopped.
         for _ in range(2):
             _, item = manager.repository.claim_next()
             manager.repository.finish_item(item["run_id"])
+        stopped = manager.repository.stop(first["id"])
+        assert stopped["failed"] == 1 and stopped["skipped"] == 196
         again = await manager.retry_failed(first["id"])
         assert again["id"] == original["id"] and again["total"] == 200
-        assert again["pending"] == 1 and again["completed"] == 3
+        assert again["pending"] == 197 and again["completed"] == 3
+        assert again["failed"] == again["skipped"] == 0
         assert len({item["position_id"] for item in again["items"]}) == 200
-        fresh = next(item for item in again["items"] if item["status"] == "queued")
-        assert manager.runner.repository.get(fresh["run_id"])["config"][
-            "retry_of_run_id"
-        ] == str(first_attempt)
-        assert manager.runner.repository.list(queue_tag=original["id"])[1] == 204
+        for previous, current in zip(stopped["items"], again["items"], strict=True):
+            if previous["status"] == "completed":
+                assert current == previous
+            else:
+                assert current["run_id"] != previous["run_id"]
+                assert manager.runner.repository.get(current["run_id"])["config"][
+                    "retry_of_run_id"
+                ] == str(previous["run_id"])
+        assert manager.runner.repository.list(queue_tag=original["id"])[1] == 596
         assert len(manager.repository.list_queues()) == 1
 
     asyncio.run(run())
