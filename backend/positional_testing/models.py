@@ -192,15 +192,23 @@ class CreatePositionQueueRequest(PositionalTestingModel):
         return value
 
 
+class CodexQueueSelection(PositionalTestingModel):
+    model_id: Literal["codex"] = "codex"
+    model_name: str
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max", "ultra"]
+
+
 class PositionQueueSummary(PositionalTestingModel):
     id: UUID
     name: str | None = None
+    retry_of: UUID | None = None
+    retry_of_name: str | None = None
     dataset_version: str
     split: Literal["train", "test"]
     harness_id: str
     harness_name: str
     harness_version: str
-    model_selection: ModelSelection
+    model_selection: ModelSelection | CodexQueueSelection
     status: Literal["queued", "running", "stopping", "completed", "stopped"]
     total: int
     completed: int

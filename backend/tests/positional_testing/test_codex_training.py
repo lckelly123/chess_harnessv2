@@ -145,6 +145,7 @@ def test_real_harness_retry_tools_exact_capture_and_post_run_grading(
     malformed = "  This is deliberately not the harness format.\r\n"
     current = submit(api, run, current, malformed)
     assert current["pass"]["pass_number"] == 2
+    assert current["last_accepted_pass_id"] == first["pass"]["pass_id"]
     assert current["pass"]["model_input"]["forced_retry"] is True
     assert run_store.passes[(run["run_id"], 1)]["status"] == "failed"
     repeated = submit(api, run, first, malformed)

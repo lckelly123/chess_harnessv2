@@ -3,8 +3,9 @@
 **Positional testing → Codex (training) → Run once** runs a saved position with
 your signed-in Codex CLI. The existing harness owns the boards, prompt builder,
 parser, tools, database passes, final move validation, and subsequent Stockfish
-grading. This option runs individual positions; it does not add Codex to full-set
-queues or automatically export a JSONL dataset.
+grading. You can also choose **Queue harness → Codex (training)** under **Run a
+full set** to process the training or test set. Neither mode automatically exports
+a JSONL dataset.
 
 ```text
 Web UI → backend creates the normal positional run
@@ -30,13 +31,15 @@ the worker in the background without opening a terminal window. The UI detects i
 automatically. LM Studio and Unsloth do not need to have a model loaded for this
 option. Running the launcher again does not start a second worker.
 
-The worker reads only the default `model` and `model_reasoning_effort` from your
-Codex configuration. It chooses the newest available native CLI among PATH and
+The worker reads the default `model` from your Codex configuration and defaults
+to **extra high (`xhigh`) reasoning**, independently of your general Codex effort
+setting. Override effort with `-ReasoningEffort` (or `CODEX_TEACHER_REASONING_EFFORT`).
+It chooses the newest available native CLI among PATH and
 installed desktop binaries, avoiding an outdated PATH executable. It preserves
 your global configuration. Override the model at startup if wanted:
 
 ```powershell
-.\scripts\start-codex-worker.ps1 -Model gpt-6-astra -ReasoningEffort max
+.\scripts\start-codex-worker.ps1 -Model gpt-6-astra -ReasoningEffort xhigh
 ```
 
 Overrides apply to a newly started worker, not one already running. To use a
@@ -53,13 +56,45 @@ passed to `codex exec` and saved in the run's configuration, along with the CLI
 version and teacher-prompt hash. This records the requested CLI model; it is not
 an independent verification of the remote server's weights.
 
+## Full-set queues
+
+In **Positional testing → Run a full set**, choose the training or test set,
+dataset, and **Codex (training)** as the queue harness. Add an optional queue name,
+then click **Run full queue**. The connected Windows worker must be idle and
+online to start. The shared LM Studio, Unsloth, or OpenAI selector does not apply.
+
+The queue captures the worker's model and reasoning effort when created, along
+with its position membership. These settings stay fixed for the queue, including
+after a worker restart. Each position gets its own teacher session, with a fresh
+`codex exec` process per pass, and uses the pre-created queue run record. Inputs,
+explanations, tool results, final moves, and subsequent engine grades appear in
+the normal history and live trace views.
+
+Keep the Windows worker running; closing the browser is fine. Positions execute
+one at a time. A failed position is retained and the queue continues. If the worker
+disconnects, the active attempt fails through the existing watchdog and pending
+positions wait for reconnection. A backend restart retains interrupted attempts
+as failures and continues unstarted positions; it does not replay a paid attempt.
+
+**Stop after current** finishes the active position and skips remaining positions.
+The existing queue item timeout also applies to Codex positions (Docker default
+2,700 seconds / 45 minutes per position, configured by
+`POSITION_QUEUE_ITEM_TIMEOUT_SECONDS`); a timeout stops the teacher session and
+records the failed attempt before moving on. The backend reads this setting at
+startup. Changing it requires recreating the backend, which interrupts the active
+position and resumes pending positions with the new limit. A standalone backend
+without this environment setting retains its 1,800-second fallback.
+
 ## Teacher prompt and response format
 
 The source of the instructions is
 [`backend/codex_training/teacher_prompt.md`](../backend/codex_training/teacher_prompt.md).
-Each pass supplies it alongside the exact harness input. It asks for an authored
-decision explanation in natural prose, grounded in the current position and
-actual returned tool results. It preserves the existing Qwen syntax:
+Each pass supplies it alongside the exact harness input. Version `chess-teacher-v2`
+asks for an authored first-person working assessment in Qwen's conversational
+style: current evidence, uncertainty, and the next useful action, with corrections
+grounded in actual returned tool results. It discourages predetermined conclusions,
+manufactured hesitation, and formal retrospective explanations. It preserves the
+existing Qwen syntax:
 
 ```xml
 <think>
@@ -143,7 +178,13 @@ memory and environment variables. The backend itself does not import the MCP SDK
 
 Worker startup/errors are in `.runtime/worker.stderr.log`. Per-pass logs under
 `.runtime/logs/<run-id>/` contain operational event metadata and a bounded stderr
-tail, with known credentials redacted. They do not save private reasoning events.
+tail, with known credentials redacted. Structured `error` / `turn.failed` messages
+are retained and take priority over stderr warnings in the reported failure.
+They do not save private reasoning events or tool payloads. Before failing a run
+on a CLI exit, the worker checks the backend's `last_accepted_pass_id`. If that
+matches the assigned pass, processing continues without resubmitting it. A
+terminal backend outcome is preserved; transport receipt never overrides harness
+validation or grading. An unaccepted pass still fails with the actual CLI error.
 
 ## Manual MCP clients
 

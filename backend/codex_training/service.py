@@ -40,6 +40,7 @@ class CodexTrainingService:
         model_label: str,
         pass_timeout: float,
         metadata: dict | None = None,
+        queued_run_id: str | None = None,
     ):
         if await run_in_threadpool(get_saved_position, position_id) is None:
             raise UnknownSavedPositionError(f"Unknown saved position: {position_id}")
@@ -59,12 +60,14 @@ class CodexTrainingService:
                 if self.tasks[run_id].done():
                     del self.tasks[run_id]
                     del self.sessions[run_id]
-            session = RunSession(str(uuid4()), pass_timeout=pass_timeout)
+            session = RunSession(
+                queued_run_id or str(uuid4()), pass_timeout=pass_timeout
+            )
             session.position_id = position_id
             session.metadata = metadata or {}
             self.sessions[session.run_id] = session
             self.tasks[session.run_id] = asyncio.create_task(
-                self._run(session, position_id, model_label),
+                self._run(session, position_id, model_label, queued_run_id),
                 name=f"codex-training-{session.run_id}",
             )
         # Usually returns the first input immediately; slow startup stays observable.
@@ -80,7 +83,13 @@ class CodexTrainingService:
         session.token_scope(token)
         return session
 
-    async def _run(self, session: RunSession, position_id: str, model_label: str):
+    async def _run(
+        self,
+        session: RunSession,
+        position_id: str,
+        model_label: str,
+        queued_run_id: str | None = None,
+    ):
         async def resolve_model():
             return model_label
 
@@ -99,6 +108,7 @@ class CodexTrainingService:
             result = await runner.run_once(
                 position_id,
                 AGENT_PLAYER_2_ID,
+                queued_run_id=queued_run_id,
                 config_metadata={
                     "provider": PROVIDER,
                     "capture_scope": "harness_exchange",

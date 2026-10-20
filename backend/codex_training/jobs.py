@@ -60,6 +60,7 @@ class WorkerJobs:
         ]
 
     def status(self):
+        active = next(iter(self.active_jobs()), None)
         return {
             "configured": bool(worker_token()),
             "online": self.online(),
@@ -67,7 +68,10 @@ class WorkerJobs:
             "reasoning_effort": self.worker["reasoning_effort"]
             if self.worker
             else None,
-            "active_run_id": next(iter(self.active_jobs()), None),
+            "active_run_id": active,
+            "active_queue_id": self.training.sessions[active].metadata.get("queue_tag")
+            if active
+            else None,
         }
 
     def heartbeat(self, payload):
@@ -88,7 +92,9 @@ class WorkerJobs:
             ),
         }
 
-    async def enqueue(self, position_id):
+    async def enqueue(
+        self, position_id, *, queued_run_id=None, queue_tag=None, selection=None
+    ):
         async with self.lock:
             if not self.online():
                 raise RunCapacityError(
@@ -99,17 +105,25 @@ class WorkerJobs:
                     "Finish or stop the current Codex training run first."
                 )
             worker = dict(self.worker)
+            model = selection["model_name"] if selection else worker["model"]
+            effort = (
+                selection["reasoning_effort"]
+                if selection
+                else worker["reasoning_effort"]
+            )
             active = await self.training.start(
                 position_id,
-                model_label=worker["model"],
+                model_label=model,
                 pass_timeout=900,
+                queued_run_id=queued_run_id,
                 metadata={
                     "execution_mode": "codex_exec",
                     "context_mode": "fresh_per_pass",
                     "model_identity_source": "worker_cli_argument",
-                    "teacher_model": worker["model"],
-                    "teacher_reasoning_effort": worker["reasoning_effort"],
+                    "teacher_model": model,
+                    "teacher_reasoning_effort": effort,
                     "codex_cli_version": worker["cli_version"],
+                    **({"queue_tag": str(queue_tag)} if queue_tag else {}),
                 },
             )
             # Pruned terminal bridge sessions are already durable in run history.
@@ -131,6 +145,7 @@ class WorkerJobs:
         return {
             "run_id": run_id,
             "position_id": session.position_id,
+            "queue_tag": session.metadata.get("queue_tag"),
             "status": session.status,
             "pass_number": session.pass_number,
             "progress": self.jobs[run_id]["progress"],

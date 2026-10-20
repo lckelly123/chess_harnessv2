@@ -633,8 +633,13 @@ details[open] > summary > svg:last-child { transform: rotate(180deg); }
 .position-queue__hint { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .position-queue__error { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 12px; background: var(--danger-wash); color: var(--danger); border-radius: 8px; font-size: 13px; overflow-wrap: anywhere; }
 .position-queue__history { margin-top: 22px; max-width: 640px; }
+.position-queue__retry { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--rule-soft); }
+.position-queue__retry h3 { margin: 0 0 16px; font-size: 15px; }
+.position-queue__retry-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 14px; }
+.position-queue__retry .position-queue__hint { overflow-wrap: anywhere; }
+.position-queue__retry [role="status"]:empty { display: none; }
 .position-queue__progress { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--rule-soft); }
-.position-queue__id { margin: 0 0 12px; color: var(--ink-soft); font-size: 12px; line-height: 1.6; }
+.position-queue__id { margin: 0 0 12px; color: var(--ink-soft); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .position-queue__progress header > div { min-width: 0; }
 .position-queue__progress h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin: 0; font-size: 15px; overflow-wrap: anywhere; }
 .position-queue__progress h3 > span:first-child { min-width: 0; }
@@ -677,6 +682,7 @@ details[open] > summary > svg:last-child { transform: rotate(180deg); }
   .position-queue__heading, .position-queue__progress > header { align-items: flex-start; flex-direction: column; gap: 12px; }
   .position-queue__model { padding: 0; }
   .position-queue__form { column-gap: 12px; }
+  .position-queue__retry-form { grid-template-columns: minmax(0, 1fr); }
   .position-queue__name input { font-size: 16px; }
   .position-queue__error { align-items: flex-start; flex-direction: column; }
   .position-queue__item { grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; }

@@ -50,8 +50,11 @@ CREATE INDEX IF NOT EXISTS model_runs_queue_status
     ON model_runs (queue_tag, status) WHERE queue_tag IS NOT NULL;
 CREATE INDEX IF NOT EXISTS model_runs_created
     ON model_runs (created_at DESC, id DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS model_runs_queue_position
-    ON model_runs (queue_tag, position_id) WHERE queue_tag IS NOT NULL;
+-- Retain superseded retry attempts while enforcing one current entry per position.
+CREATE UNIQUE INDEX IF NOT EXISTS model_runs_current_queue_position
+    ON model_runs (queue_tag, position_id)
+    WHERE queue_tag IS NOT NULL AND config->>'superseded_by_run_id' IS NULL;
+DROP INDEX IF EXISTS model_runs_queue_position;
 
 CREATE TABLE IF NOT EXISTS model_run_passes (
     run_id uuid NOT NULL REFERENCES model_runs(id) ON DELETE CASCADE,

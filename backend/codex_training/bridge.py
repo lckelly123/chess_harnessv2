@@ -64,6 +64,7 @@ class RunSession:
             "pass": None,
             "move": self.move,
             "error": self.error,
+            "last_accepted_pass_id": next(reversed(self._accepted), None),
         }
         if self.status == "waiting" and self.pending is not None:
             result["pass"] = {

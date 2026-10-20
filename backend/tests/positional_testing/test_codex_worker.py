@@ -6,7 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from codex_training.worker import WindowsWorker, codex_command, resolve_codex
+from codex_training.worker import (
+    CodexPassError,
+    WindowsWorker,
+    codex_command,
+    resolve_codex,
+)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows desktop CLI discovery")
@@ -103,3 +108,177 @@ def test_worker_cancellation_terminates_child_and_reports_failure(
             await worker.client.aclose()
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_worker_keeps_redacted_actual_error_after_process_exit(
+    tmp_path, monkeypatch, exit_code
+):
+    events = [
+        {
+            "type": "item.completed",
+            "item": {"type": "reasoning", "text": "PRIVATE CONTENT"},
+        },
+        {"type": "error", "message": "temporary disconnect"},
+        {
+            "type": "turn.failed",
+            "error": {
+                "code": "quota",
+                "message": "Usage exhausted run-secret pass-secret worker-secret sk-private-key",
+            },
+        },
+    ]
+    child = tmp_path / "failed.py"
+    child.write_text(
+        "import sys\nsys.stdin.read()\n"
+        "sys.stderr.write('WARN Shell snapshot not supported yet for PowerShell\\n')\n"
+        f"sys.stdout.write({''.join(json.dumps(event) + chr(10) for event in events)!r})\n"
+        f"sys.exit({exit_code})\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "codex_training.worker.codex_command",
+        lambda *a, **kw: [sys.executable, str(child)],
+    )
+
+    async def run():
+        worker = WindowsWorker(
+            backend_url="http://127.0.0.1:8000",
+            token="worker-secret",
+            executable="fixture",
+            model="fixture",
+            effort="xhigh",
+            cli_version="fixture",
+            runtime=tmp_path,
+        )
+
+        async def report(*args, **kwargs):
+            pass
+
+        monkeypatch.setattr(worker, "report", report)
+        try:
+            with pytest.raises(
+                CodexPassError, match="quota: Usage exhausted"
+            ) as caught:
+                await worker.run_pass(
+                    {
+                        "run_id": "fixture-run",
+                        "run_token": "run-secret",
+                        "model": "fixture",
+                        "reasoning_effort": "xhigh",
+                    },
+                    {
+                        "pass": {
+                            "pass_id": "pass",
+                            "pass_number": 1,
+                            "pass_token": "pass-secret",
+                        }
+                    },
+                )
+            log = (tmp_path / "logs/fixture-run/pass-001.jsonl").read_text()
+            assert "Usage exhausted" in log and "[redacted]" in log
+            assert "PowerShell" not in str(caught.value)
+            for secret in (
+                "run-secret",
+                "pass-secret",
+                "worker-secret",
+                "sk-private-key",
+                "PRIVATE CONTENT",
+            ):
+                assert secret not in log + str(caught.value)
+        finally:
+            await worker.client.aclose()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "after_status", ["processing", "waiting", "completed", "failed", "cancelled"]
+)
+def test_cli_failure_after_accepted_submission_preserves_backend_outcome(
+    tmp_path, monkeypatch, after_status
+):
+    async def run():
+        worker = WindowsWorker(
+            backend_url="http://127.0.0.1:8000",
+            token="fixture",
+            executable="fixture",
+            model="fixture",
+            effort="xhigh",
+            cli_version="fixture",
+            runtime=tmp_path,
+        )
+        snapshots = iter(
+            [
+                {"status": "waiting", "pass": {"pass_id": "assigned"}},
+                {
+                    "status": after_status,
+                    "pass": {"pass_id": "next"} if after_status == "waiting" else None,
+                    "last_accepted_pass_id": "assigned",
+                },
+                {"status": "completed"},
+            ]
+        )
+        reports = []
+
+        async def request(*args, **kwargs):
+            return next(snapshots)
+
+        async def run_pass(*args):
+            raise CodexPassError("CLI disconnected after submission")
+
+        async def report(*args):
+            reports.append(args)
+
+        monkeypatch.setattr(worker, "request", request)
+        monkeypatch.setattr(worker, "run_pass", run_pass)
+        monkeypatch.setattr(worker, "report", report)
+        try:
+            await worker.execute({"run_id": "run", "run_token": "token"})
+            assert reports == []
+            assert worker.active_run is None
+        finally:
+            await worker.client.aclose()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("last_accepted", [None, "earlier-pass"])
+def test_cli_failure_without_matching_backend_receipt_is_reported(
+    tmp_path, monkeypatch, last_accepted
+):
+    async def run():
+        worker = WindowsWorker(
+            backend_url="http://127.0.0.1:8000",
+            token="fixture",
+            executable="fixture",
+            model="fixture",
+            effort="xhigh",
+            cli_version="fixture",
+            runtime=tmp_path,
+        )
+        reports = []
+
+        async def request(*args, **kwargs):
+            return {
+                "status": "waiting",
+                "pass": {"pass_id": "assigned"},
+                "last_accepted_pass_id": last_accepted,
+            }
+
+        async def run_pass(*args):
+            raise CodexPassError("Actual provider failure")
+
+        async def report(*args):
+            reports.append(args)
+
+        monkeypatch.setattr(worker, "request", request)
+        monkeypatch.setattr(worker, "run_pass", run_pass)
+        monkeypatch.setattr(worker, "report", report)
+        try:
+            await worker.execute({"run_id": "run", "run_token": "token"})
+            assert reports[0][1:] == ("Stopped", "Actual provider failure")
+        finally:
+            await worker.client.aclose()
+
+    asyncio.run(run())

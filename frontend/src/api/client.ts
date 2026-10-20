@@ -47,6 +47,7 @@ export const matchApi: MatchApi = {
   listPositionQueues: () => request<PositionQueueList>("/api/positional-testing/queues"),
   getPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}`),
   createPositionQueue: (input) => request<PositionQueueDetail>("/api/positional-testing/queues", { method: "POST", body: JSON.stringify(input) }),
+  retryFailedPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}/retry-failed`, { method: "POST" }),
   stopPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}/stop`, { method: "POST" }),
   deletePositionQueue: (id) => request<void>(`/api/positional-testing/queues/${encodeURIComponent(id)}`, { method: "DELETE" }),
   listHarnesses: () => request<HarnessVersion[]>("/api/harnesses"),

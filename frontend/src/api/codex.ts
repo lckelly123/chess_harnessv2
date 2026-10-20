@@ -9,11 +9,13 @@ export interface CodexWorkerStatus {
   model: string | null;
   reasoning_effort: string | null;
   active_run_id: string | null;
+  active_queue_id?: string | null;
 }
 
 export interface CodexJob {
   run_id: string;
   position_id: string;
+  queue_tag?: string | null;
   status: "starting" | "waiting" | "processing" | "completed" | "failed" | "cancelled";
   pass_number: number;
   progress: string;

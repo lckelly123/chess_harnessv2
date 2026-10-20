@@ -291,6 +291,28 @@ retains a durably saved grade, flags interrupted attempts, and continues pending
 rows without replaying paid calls. Unqueued traces are outside this recovery.
 Closing the browser does not stop the worker; database outages pause consumption.
 
+Under **Retry a past queue**, choose an explicit **Past queue**, then click
+**Retry failed positions**. The selector lists finished or stopped queues containing
+failed runs, showing their names, failure counts, timestamps, and short IDs.
+This selection is independent of **Recent queues**, which controls the results
+being viewed; browsing results or polling does not change the retry target.
+The retry action reopens that same queue, preserving its ID, name, position order,
+and saved harness/model selection. Only failed entries receive fresh run IDs;
+completed and skipped entries stay in place. Codex retries retain the original
+model and reasoning effort and require an idle, connected Windows worker.
+
+Each retry starts the full position again, including model passes and grading;
+it does not resume partial passes or only repeat a failed evaluation. Completed
+runs (including blunders) and skipped positions are excluded. Earlier failed
+attempts and their passes remain in run history under the same queue tag.
+`config.superseded_by_run_id` links an earlier attempt to its replacement, and
+`config.retry_of_run_id` links the replacement back. Queue counts and the positions
+list include only current attempts, so each position appears once even after
+repeated retries. Whole-queue deletion also removes the retained attempts.
+Legacy `retryOf`/`retryOfName` fields remain readable for older separate retry
+queues; new retries do not create that lineage or rename the queue.
+The same state lock prevents overlapping queues and duplicate concurrent retries.
+
 The migration embeds former dataset/reference records in position metadata and
 archives original queue records in `config.queue_legacy`. Existing run IDs and pass
 contents are retained, including failed attempts. Pending/skipped legacy queue
@@ -299,8 +321,14 @@ items become scheduled run rows. Existing evaluation failures are normalized to
 The four superseded tables are removed transactionally, without CASCADE; an
 unexpected dependency rolls back the upgrade. Back up the volume before upgrading.
 
-`POSITION_QUEUE_ITEM_TIMEOUT_SECONDS` defaults to 1800 seconds for the entire
-model turn plus grading. A timed-out run is flagged and the next begins.
+Docker configures `POSITION_QUEUE_ITEM_TIMEOUT_SECONDS` to 2700 seconds (45 minutes)
+per position for the entire model turn plus grading. A timed-out run is flagged
+and the next begins. A standalone backend without this environment setting keeps
+its 1800-second fallback. The timeout is read at backend startup; changing `.env`
+or Compose does not change the running queue's deadline. Apply a new value with
+`docker compose up -d --no-deps backend`. This interrupts any active position,
+retains its trace as a failed attempt, and resumes pending positions using the new
+timeout. It does not retry already failed positions.
 The existing 180-second Stockfish timeout still applies within that limit.
 The Docker backend must remain running for progress; its restart resumes pending
 work automatically. Changing the UI's model or harness cannot change a queue's

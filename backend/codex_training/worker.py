@@ -27,6 +27,29 @@ RUNTIME = BACKEND.parent / ".runtime"
 TERMINAL = {"completed", "failed", "cancelled"}
 
 
+class CodexPassError(RuntimeError):
+    """CLI failure whose outcome must be reconciled with the harness receipt."""
+
+
+def redact_diagnostic(text, secrets):
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "[redacted]")
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]+", "[redacted]", text)
+    return re.sub(r"(?i)(Bearer\s+)\S+", r"\1[redacted]", text)
+
+
+def event_error(event):
+    """Extract diagnostics only; never retain reasoning, messages, or tool payloads."""
+    if event.get("type") not in {"error", "turn.failed"}:
+        return None
+    error = event.get("error")
+    if isinstance(error, dict):
+        parts = [str(error[key]) for key in ("code", "message") if error.get(key)]
+        return ": ".join(parts) or None
+    return error if isinstance(error, str) else event.get("message")
+
+
 def resolve_codex(explicit=None):
     """Prefer the newest installed native CLI; preserve an explicit override."""
     override = explicit or os.getenv("CODEX_CLI_PATH")
@@ -258,20 +281,20 @@ class WindowsWorker:
                 ),
             )
             stderr = []
+            diagnostics = []
+            turn_failed = False
+            secrets_to_redact = (self.token, job["run_token"], assignment["pass_token"])
 
             async def read_errors():
                 while line := await process.stderr.readline():
-                    text = line.decode("utf-8", errors="replace")
-                    for secret in (
-                        self.token,
-                        job["run_token"],
-                        assignment["pass_token"],
-                    ):
-                        text = text.replace(secret, "[redacted]")
+                    text = redact_diagnostic(
+                        line.decode("utf-8", errors="replace"), secrets_to_redact
+                    )
                     stderr.append(text)
                     del stderr[:-25]
 
             async def read_events():
+                nonlocal turn_failed
                 with (logs / f"pass-{number:03d}.jsonl").open(
                     "a", encoding="utf-8"
                 ) as log:
@@ -280,8 +303,12 @@ class WindowsWorker:
                             event = json.loads(line)
                         except (ValueError, UnicodeDecodeError):
                             continue
+                        if not isinstance(event, dict):
+                            continue
                         # Keep operational metadata, not private reasoning/event transcripts.
                         item = event.get("item") or {}
+                        if not isinstance(item, dict):
+                            item = {}
                         safe = {
                             "type": event.get("type"),
                             "thread_id": event.get("thread_id"),
@@ -290,7 +317,17 @@ class WindowsWorker:
                             "status": item.get("status"),
                             "usage": event.get("usage"),
                         }
-                        log.write(json.dumps(safe) + "\n")
+                        turn_failed |= event.get("type") == "turn.failed"
+                        detail = event_error(event)
+                        if isinstance(detail, str) and detail.strip():
+                            detail = redact_diagnostic(detail, secrets_to_redact)[:2000]
+                            safe["error"] = detail
+                            diagnostics.append((event.get("type"), detail))
+                            del diagnostics[:-25]
+                        log.write(
+                            redact_diagnostic(json.dumps(safe), secrets_to_redact)
+                            + "\n"
+                        )
                         log.flush()
 
             readers = [
@@ -319,11 +356,28 @@ class WindowsWorker:
                             raise reader.exception()
                     if all(reader.done() for reader in readers):
                         await asyncio.wait_for(process.wait(), 5)
-                if process.returncode:
-                    detail = "".join(stderr)[-1400:]
-                    raise RuntimeError(
-                        f"Codex exited with code {process.returncode}. {detail}"
+                # An exited process can still have unread stdout, including its error.
+                await asyncio.gather(*readers)
+                if process.returncode or turn_failed:
+                    failures = [
+                        detail for kind, detail in diagnostics if kind == "turn.failed"
+                    ]
+                    detail = (
+                        failures or [detail for _, detail in diagnostics] or [None]
+                    )[-1]
+                    if not detail:
+                        detail = "No structured Codex error was captured."
+                        if stderr:
+                            detail += (
+                                " Last stderr (may contain unrelated warnings): "
+                                + "".join(stderr)[-1400:]
+                            )
+                    reason = (
+                        f"Codex exited with code {process.returncode}."
+                        if process.returncode
+                        else "Codex reported a failed turn."
                     )
+                    raise CodexPassError(f"{reason} {detail}")
             finally:
                 await terminate_tree(process)
                 await asyncio.gather(*readers, return_exceptions=True)
@@ -346,13 +400,30 @@ class WindowsWorker:
                     await self.report(job, "Processing tools or grading the move")
                     continue
                 assigned = current["pass"]["pass_id"]
-                await self.run_pass(job, current)
+                failure = None
+                try:
+                    await self.run_pass(job, current)
+                except CodexPassError as exc:
+                    failure = exc
                 after = await self.request(
                     "GET", path, token=job["run_token"], params={"wait_seconds": 25}
                 )
-                if after.get("pass") and after["pass"]["pass_id"] == assigned:
+                # The backend owns acceptance and run outcome. An MCP call being
+                # marked completed in CLI stdout alone does not prove acceptance.
+                if after["status"] in TERMINAL:
+                    return
+                if after.get("last_accepted_pass_id") != assigned:
+                    if failure:
+                        raise failure
                     raise RuntimeError(
                         "Codex exited without submitting its assigned pass. See worker logs."
+                    )
+                if failure:
+                    LOG.warning(
+                        "Run %s: pass %s was accepted; continuing after CLI failure: %s",
+                        job["run_id"],
+                        assigned,
+                        failure,
                     )
             raise RuntimeError("Codex training run stopped.")
         except Exception as exc:
@@ -426,7 +497,7 @@ def main():
         tomllib.loads(codex_config.read_text("utf-8")) if codex_config.exists() else {}
     )
     model = args.model or config.get("model")
-    effort = args.reasoning_effort or config.get("model_reasoning_effort", "medium")
+    effort = args.reasoning_effort or "xhigh"
     if not model:
         parser.error("Set --model or choose a default model in Codex configuration.")
     if effort not in {"low", "medium", "high", "xhigh", "max", "ultra"}:

@@ -10,10 +10,12 @@ from .run_repository import RunDeletionConflictError, RunRepository, lock_state
 COUNTS = """
     SELECT queue_tag AS id,
         min(config->'queue'->>'name') AS name,
+        min(config->'queue'->>'retry_of') AS retry_of,
+        min(config->'queue'->>'retry_of_name') AS retry_of_name,
         min(config->'queue'->>'dataset_version') AS dataset_version,
         min(config->'queue'->>'split') AS split,
         min(harness) AS harness_id,
-        min(config->>'harness_name') AS harness_name,
+        min(coalesce(config->'queue'->>'harness_name', config->>'harness_name')) AS harness_name,
         min(config->>'harness_version') AS harness_version,
         (jsonb_agg(config->'queue'->'model_selection')->0) AS model_selection,
         min((config->'queue'->>'created_at')::timestamptz) AS created_at,
@@ -26,6 +28,7 @@ COUNTS = """
         count(*) FILTER (WHERE status = 'running')::int AS running,
         count(*) FILTER (WHERE status = 'skipped')::int AS skipped
     FROM model_runs WHERE queue_tag IS NOT NULL
+        AND config->>'superseded_by_run_id' IS NULL
 """
 
 
@@ -34,6 +37,10 @@ class QueueConflictError(ValueError):
 
 
 class EmptyPositionSetError(ValueError):
+    pass
+
+
+class UnknownQueueError(ValueError):
     pass
 
 
@@ -71,7 +78,13 @@ class QueueRepository(RunRepository):
             return True
 
     def enqueue(
-        self, *, dataset_version, split, definition, model_selection, name=None
+        self,
+        *,
+        dataset_version,
+        split,
+        definition,
+        model_selection,
+        name=None,
     ):
         queue_tag = uuid4()
         with self.connection() as conn:
@@ -97,6 +110,7 @@ class QueueRepository(RunRepository):
                 "harness_version": definition.version,
                 "queue": {
                     "name": name,
+                    "harness_name": definition.name,
                     "dataset_version": dataset_version,
                     "split": split,
                     "model_selection": model_selection.model_dump(mode="json"),
@@ -116,11 +130,81 @@ class QueueRepository(RunRepository):
                             queue_tag,
                             model_selection.model_id,
                             definition.id,
-                            Jsonb({**config, "queue_ordinal": ordinal}),
+                            Jsonb(
+                                {
+                                    **config,
+                                    "queue_ordinal": ordinal,
+                                }
+                            ),
                         )
                         for ordinal, row in enumerate(positions, 1)
                     ],
                 )
+        return self.get_queue(queue_tag)
+
+    def retry_failed(self, queue_tag):
+        """Replace failed entries atomically, retaining all earlier attempt traces."""
+        with self.connection() as conn:
+            lock_state(conn)
+            if conn.execute(
+                "SELECT 1 FROM model_runs WHERE queue_tag IS NOT NULL "
+                "AND status IN ('queued', 'running') LIMIT 1"
+            ).fetchone():
+                raise QueueConflictError(
+                    "A queue is already active. Wait for it to finish or stop it first."
+                )
+            source = conn.execute(
+                "SELECT * FROM model_runs WHERE queue_tag = %s "
+                "AND config->>'superseded_by_run_id' IS NULL "
+                "ORDER BY (config->>'queue_ordinal')::int, id FOR UPDATE",
+                (queue_tag,),
+            ).fetchall()
+            if not source:
+                raise UnknownQueueError("The original queue no longer exists.")
+            failed = [row for row in source if row["status"] == "failed"]
+            if not failed:
+                raise EmptyPositionSetError(
+                    "This queue has no failed positions to retry."
+                )
+            for row in failed:
+                replacement = uuid4()
+                old_config = row["config"]
+                # Copy queue identity/settings, not execution metadata from the old run.
+                config = {
+                    "harness_name": old_config["queue"].get("harness_name")
+                    or old_config.get("harness_name", row["harness"]),
+                    "harness_version": old_config.get(
+                        "harness_version", row["harness"]
+                    ),
+                    "queue": {**old_config["queue"], "stop_requested": False},
+                    "queue_ordinal": old_config["queue_ordinal"],
+                    "retry_of_run_id": str(row["id"]),
+                }
+                conn.execute(
+                    "UPDATE model_runs SET config = config || %s WHERE id = %s",
+                    (Jsonb({"superseded_by_run_id": str(replacement)}), row["id"]),
+                )
+                conn.execute(
+                    "INSERT INTO model_runs "
+                    "(id, position_id, queue_tag, model, harness, config, status) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,'queued')",
+                    (
+                        replacement,
+                        row["position_id"],
+                        queue_tag,
+                        old_config["queue"]["model_selection"]["model_id"],
+                        row["harness"],
+                        Jsonb(config),
+                    ),
+                )
+            # Reopen the same queue. Completed and skipped attempts keep their results.
+            conn.execute(
+                "UPDATE model_runs SET config = jsonb_set(config, "
+                "'{queue,stop_requested}', 'false'::jsonb) WHERE queue_tag = %s "
+                "AND config->>'superseded_by_run_id' IS NULL "
+                "AND config->'queue'->>'stop_requested' = 'true'",
+                (queue_tag,),
+            )
         return self.get_queue(queue_tag)
 
     def list_queues(self, limit=20):
@@ -147,7 +231,8 @@ class QueueRepository(RunRepository):
                 "r.started_at, r.finished_at, p.phase, p.position_type, "
                 "r.final_move_uci, r.classification "
                 "FROM model_runs r JOIN positions p ON p.id = r.position_id "
-                "WHERE r.queue_tag = %s ORDER BY ordinal",
+                "WHERE r.queue_tag = %s AND r.config->>'superseded_by_run_id' IS NULL "
+                "ORDER BY ordinal",
                 (queue_tag,),
             ).fetchall()
         return {**row, "items": items}
@@ -211,7 +296,7 @@ class QueueRepository(RunRepository):
                         (row["error"], row["id"]),
                     )
 
-    def claim_next(self):
+    def claim_next(self, *, codex_ready=True):
         with self.connection() as conn:
             lock_state(conn)
             if conn.execute(
@@ -220,11 +305,14 @@ class QueueRepository(RunRepository):
                 return None
             item = conn.execute(
                 "SELECT id AS run_id, position_id, queue_tag, "
+                "config->'queue'->'model_selection'->>'model_id' AS model_id, "
                 "(config->>'queue_ordinal')::int AS ordinal "
                 "FROM model_runs WHERE queue_tag IS NOT NULL AND status = 'queued' "
                 "ORDER BY created_at, ordinal, id LIMIT 1 FOR UPDATE"
             ).fetchone()
             if item is None:
+                return None
+            if item["model_id"] == "codex" and not codex_ready:
                 return None
             conn.execute(
                 "UPDATE model_runs SET status = 'running', started_at = now() WHERE id = %s",

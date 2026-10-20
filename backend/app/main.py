@@ -64,16 +64,16 @@ def create_app(
         app.state.codex_jobs = codex_jobs
         codex_jobs.start()
         queue_manager = PositionQueueManager(
-            app.state.positional_test_runner, active_catalog
+            app.state.positional_test_runner, active_catalog, codex_jobs=codex_jobs
         )
         app.state.position_queue = queue_manager
         queue_manager.start()
         try:
             yield
         finally:
+            await queue_manager.close()
             await codex_jobs.close()
             await codex_training.close()
-            await queue_manager.close()
             await manager.close()
             if model_client is not None:
                 await model_client.aclose()

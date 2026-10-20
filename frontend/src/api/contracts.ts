@@ -238,18 +238,26 @@ export interface CreatePositionQueueInput {
   split: "train" | "test";
   datasetVersion: string;
   harnessId: string;
-  modelSelection: ModelSelection;
+  modelSelection?: ModelSelection;
+}
+
+export interface CodexQueueSelection {
+  modelId: "codex";
+  modelName: string;
+  reasoningEffort: string;
 }
 
 export interface PositionQueueSummary {
   id: string;
   name?: string | null;
+  retryOf?: string | null;
+  retryOfName?: string | null;
   datasetVersion: string;
   split: "train" | "test";
   harnessId: string;
   harnessName: string;
   harnessVersion: string;
-  modelSelection: ModelSelection;
+  modelSelection: ModelSelection | CodexQueueSelection;
   status: "queued" | "running" | "stopping" | "completed" | "stopped";
   total: number;
   completed: number;
@@ -286,6 +294,7 @@ export interface MatchApi {
   listPositionQueues(): Promise<PositionQueueList>;
   getPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   createPositionQueue(input: CreatePositionQueueInput): Promise<PositionQueueDetail>;
+  retryFailedPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   stopPositionQueue(queueTag: string): Promise<PositionQueueDetail>;
   deletePositionQueue(queueTag: string): Promise<void>;
   listHarnesses(): Promise<HarnessVersion[]>;

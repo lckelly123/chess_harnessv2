@@ -27,7 +27,11 @@ from .models import (
     SavedPositionList,
     SavedPositionRun,
 )
-from .queue_repository import EmptyPositionSetError, QueueConflictError
+from .queue_repository import (
+    EmptyPositionSetError,
+    QueueConflictError,
+    UnknownQueueError,
+)
 from .run_repository import RunDeletionConflictError
 from .runner import PositionalTestRunner, UnknownSavedPositionError
 
@@ -59,6 +63,24 @@ async def create_queue(request_body: CreatePositionQueueRequest, request: Reques
     except ModelResolutionError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except PositionLibraryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post(
+    "/queues/{queue_id}/retry-failed",
+    response_model=PositionQueueDetail,
+    status_code=202,
+)
+async def retry_failed_queue(queue_id: UUID, request: Request):
+    try:
+        return await request.app.state.position_queue.retry_failed(queue_id)
+    except UnknownQueueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except QueueConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (UnknownHarnessError, EmptyPositionSetError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (ModelResolutionError, PositionLibraryUnavailableError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 

@@ -103,7 +103,8 @@ class RunRepository:
                 "UPDATE model_runs SET status = 'failed', error = %s, "
                 "failure_stage = CASE WHEN final_move_uci IS NULL "
                 "THEN 'execution' ELSE 'evaluation' END, finished_at = now() "
-                "WHERE status = 'running' AND config->>'provider' = 'codex_mcp' "
+                "WHERE status = 'running' AND queue_tag IS NULL "
+                "AND config->>'provider' = 'codex_mcp' "
                 "RETURNING id",
                 (error,),
             ).fetchall()

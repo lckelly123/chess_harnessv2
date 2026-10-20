@@ -70,7 +70,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
         const worker = await codexApi.worker();
         if (cancelled) return;
         setCodexWorker(worker);
-        if (worker.active_run_id) setCodexRunId((current) => current ?? worker.active_run_id);
+        if (worker.active_run_id && !worker.active_queue_id) setCodexRunId((current) => current ?? worker.active_run_id);
       } catch {
         if (!cancelled) setCodexWorker(null);
       } finally {
@@ -89,6 +89,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
       try {
         const job = await codexApi.job(codexRunId);
         if (cancelled) return;
+        if (job.queue_tag) { setCodexRunId(null); return; }
         setCodexJob(job);
         setCodexConnectionError(null);
         setSelectedPositionId(job.position_id);
@@ -289,7 +290,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
         <a href="#positional-run-history">View run history</a>
       </header>
 
-      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} modelReady={modelReady} singleRunning={running} onActiveChange={setQueueActive} onInspect={(positionId, runId) => {
+      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} modelReady={modelReady} codexWorker={codexWorker} singleRunning={running} onActiveChange={setQueueActive} onInspect={(positionId, runId) => {
         choosePosition(positionId);
         setInspectedRunId(runId ?? undefined);
         setHistoryRevision((value) => value + 1);
