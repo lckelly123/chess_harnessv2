@@ -20,3 +20,5 @@ backend/data/
 .impeccable/review/
 .impeccable/config.local.json
 .runtime/
+unsloth_compiled_cache/
+models/training_data

@@ -7,7 +7,7 @@ import {
   RotateCcw,
   Square,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, matchApi } from "../api/client";
 import { CODEX_TRAINING_ID, codexApi, type CodexJob, type CodexWorkerStatus } from "../api/codex";
 import { CodexTrainingChoice } from "./CodexTrainingChoice";
@@ -23,6 +23,8 @@ import { PositionLibrary, PositionTags } from "./PositionLibrary";
 import { tagLabel } from "./positionFilters";
 import { RunHistory } from "./RunHistory";
 import { PositionQueue } from "./PositionQueue";
+import { GrpoCollection } from "./GrpoCollection";
+import type { GrpoGroup } from "../api/grpo";
 
 const POSITIONAL_HARNESSES = [
   { id: "baseline-direct-submit-langgraph-v1", name: "Baseline" },
@@ -55,6 +57,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   const [runError, setRunError] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<PositionalTestRun | null>(null);
   const [queueActive, setQueueActive] = useState(false);
+  const [grpoEnabled, setGrpoEnabled] = useState(false);
   const [inspectedRunId, setInspectedRunId] = useState<string | undefined>();
   const [codexWorker, setCodexWorker] = useState<CodexWorkerStatus | null>(null);
   const [codexRunId, setCodexRunId] = useState<string | null>(null);
@@ -67,6 +70,13 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   const discarding = useRef(new Set<string>());
   const singleOutcome = useRef<{ runId: string; result: PositionalTestRun | null } | null>(null);
   const isCodex = selectedHarnessId === CODEX_TRAINING_ID;
+  const attachGrpo = useCallback((group: GrpoGroup) => {
+    setSelectedPositionId(group.positionId);
+    setSelectedHarnessId(group.harnessId);
+    setRunResult(null);
+    setRunError(null);
+  }, []);
+  const finishGrpo = useCallback(() => setHistoryRevision((value) => value + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -446,7 +456,13 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                       onSelect={() => chooseHarness(CODEX_TRAINING_ID)} />
                   </fieldset>
 
-                  <div className="positional-runbar">
+                  <GrpoCollection enabled={grpoEnabled} onEnabledChange={setGrpoEnabled}
+                    positionId={selectedPosition.id} harnessId={selectedHarnessId}
+                    modelSelection={modelSelection} modelReady={modelReady}
+                    running={running} queueActive={queueActive} onRunningChange={onRunningChange}
+                    onAttach={attachGrpo} onFinished={finishGrpo} />
+
+                  {!grpoEnabled ? <div className="positional-runbar">
                     <div className="positional-runbar__copy" role="status">
                       {running ? (
                         <LoaderCircle className="spin" size={18} aria-hidden="true" />
@@ -484,7 +500,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                     {running && (codexRunId || singleRunId) ? <><button className="codex-stop" type="button" disabled={cancelling} onClick={() => void cancelRun()}><Square size={14} aria-hidden="true" />{cancelling ? "Cancelling…" : cancelError ? "Retry discard" : "Cancel run"}</button><p className="position-queue__hint">Discards this attempt and its saved passes.</p></> : null}
                     {cancelError ? <p className="run-failure" role="alert">Could not discard the run. {cancelError}</p> : null}
                     {runNotice ? <p className="position-queue__hint" role="status">{runNotice}</p> : null}
-                  </div>
+                  </div> : null}
 
                   {codexConnectionError && isCodex ? <p className="run-failure" role="alert">{codexConnectionError}</p> : null}
 

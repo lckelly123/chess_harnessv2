@@ -36,12 +36,14 @@ class PositionalTestRunner:
         repository=None,
         evaluator=None,
         active_runs=None,
+        recorder_factory=None,
     ):
         self._catalog = catalog
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self.repository = repository or run_repository.RunRepository()
         self.evaluator = evaluator or evaluation.StockfishEvaluator()
         self.active_runs = active_runs if active_runs is not None else {}
+        self.recorder_factory = recorder_factory or PassRecorder
 
     async def run_once(
         self,
@@ -143,7 +145,7 @@ class PositionalTestRunner:
                 definition.id,
                 config,
             )
-        recorder = PassRecorder(self.repository, run_id)
+        recorder = self.recorder_factory(self.repository, run_id)
         control.recorder = recorder
         token = current_recorder.set(recorder)
         try:

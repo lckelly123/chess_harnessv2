@@ -6,7 +6,12 @@ from collections.abc import Callable
 from harness.contracts import HarnessError, TurnCancelled
 from harness.model import Model, visible_output
 from harness.protocol import ToolProtocolError
-from harness.recording import complete_pass, record_node, recorded_tool
+from harness.recording import (
+    complete_pass,
+    current_recorder,
+    record_node,
+    recorded_tool,
+)
 
 from .config import AgentConfig
 from .prompt_builder import build_prompt
@@ -40,6 +45,9 @@ class SynthesisNodes:
             raise TurnCancelled("Turn cancelled; no move submitted.")
 
     def _retry(self, state, message, *, protocol_error, failed_tool_index=None):
+        observer = current_recorder.get()
+        if observer is not None and hasattr(observer, "rejection"):
+            observer.rejection(message)
         logger.warning(
             "Rejected chess_harness response: game=%s ply=%s pass=%s "
             "retries_used=%s/%s reason=%s",

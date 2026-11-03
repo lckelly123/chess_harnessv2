@@ -8,12 +8,14 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def disable_background_queue(monkeypatch):
+def disable_background_queue(monkeypatch, tmp_path):
     # Unit/API tests must never consume queues in a developer's public DB.
     # Queue integration tests explicitly drive serve()/execute_item() in an isolated schema.
     from positional_testing.queue import PositionQueueManager
 
     monkeypatch.setattr(PositionQueueManager, "start", lambda self: None)
+    monkeypatch.setenv("GRPO_OUTPUT_ROOT", str(tmp_path / "grpo"))
+    monkeypatch.setenv("GRPO_CAPTURE_TOKEN_FILE", str(tmp_path / "capture.token"))
 
 
 @pytest.fixture

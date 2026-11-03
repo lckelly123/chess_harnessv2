@@ -24,6 +24,8 @@ COPY chess_core ./chess_core
 COPY harness ./harness
 COPY positional_testing ./positional_testing
 COPY codex_training ./codex_training
+COPY grpo ./grpo
+COPY grpo_capture ./grpo_capture
 
 FROM base AS test
 COPY pyproject.toml .

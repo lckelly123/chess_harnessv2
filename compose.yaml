@@ -33,6 +33,9 @@ services:
       UNSLOTH_API_KEY: ${UNSLOTH_API_KEY:-}
       UNSLOTH_MODEL: ${UNSLOTH_MODEL:-}
       UNSLOTH_TIMEOUT_SECONDS: ${UNSLOTH_TIMEOUT_SECONDS:-600}
+      GRPO_CAPTURE_BASE_URL: ${GRPO_CAPTURE_BASE_URL:-http://host.docker.internal:8890}
+      GRPO_CAPTURE_TOKEN_FILE: /app/codex_runtime/grpo-capture.token
+      GRPO_OUTPUT_ROOT: /app/models/training_data/RL_testing
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MAX_OUTPUT_TOKENS: ${OPENAI_MAX_OUTPUT_TOKENS:-8000}
       OPENAI_RETRY_MAX_OUTPUT_TOKENS: ${OPENAI_RETRY_MAX_OUTPUT_TOKENS:-2000}
@@ -59,6 +62,9 @@ services:
       - ./backend/harness:/app/harness
       - ./backend/positional_testing:/app/positional_testing
       - ./backend/codex_training:/app/codex_training
+      - ./backend/grpo:/app/grpo
+      - ./backend/grpo_capture:/app/grpo_capture
+      - ./models/training_data/RL_testing:/app/models/training_data/RL_testing
       - ./.runtime:/app/codex_runtime:ro
       - backend_data:/app/data
     healthcheck:

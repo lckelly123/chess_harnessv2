@@ -54,6 +54,36 @@ The TypeScript source of truth for the client is [`frontend/src/api/contracts.ts
 
 FastAPI also exposes an interactive schema at [http://localhost:8000/docs](http://localhost:8000/docs) while the Docker stack is running.
 
+## GRPO collection
+
+The **Save for GRPO** option collects ten independent trajectories from one
+position. It is separate from the ordinary single-run cancellation contract:
+stopping a collection retains its captured data. The first version accepts
+only the Unsloth provider with `agent-player-2-langgraph-v1` (`chess_harness`).
+The browser requests collection and displays authoritative backend progress;
+it never calculates rewards, token probabilities or advantages.
+
+| Method | Route | Behavior |
+| --- | --- | --- |
+| `GET` | `/api/grpo/status` | Reports `workerOnline`, nullable `workerMessage`, and nullable `activeRun`. Allows the page to reconnect to an active collection. |
+| `POST` | `/api/grpo/runs` | Accepts `name`, `positionId`, `harnessId`, and `modelSelection`; starts a background ten-trajectory collection and returns 202 with the group state. Names identify new output folders and cannot overwrite existing collections. |
+| `GET` | `/api/grpo/runs/{name}` | Returns the saved/current group state, including trajectory summaries and progress. |
+| `POST` | `/api/grpo/runs/{name}/stop` | Requests a stop while retaining completed and available partial captures. Returns the group state. |
+
+Group state uses camelCase and includes `name`, `status`, `positionId`,
+`harnessId`, `modelName`, `currentTrajectory`, `currentCall`,
+`completedTrajectories`, `totalTrajectories`, `outputDirectory`, nullable
+`error`, `stopping`, and `trajectories`. Group statuses are `preparing`, `running`,
+`completed`, `stopped`, `failed`, or `interrupted`. Each trajectory reports
+`trajectory`, `status`, nullable `cpLoss`, `rejectedModelCalls`, and `toolCounts`.
+Trajectory statuses are `pending`, `running`, `completed`, `failed`, `stopped`,
+or `interrupted`. Failed attempts count toward the ten; no advantage is
+calculated or returned.
+
+The files are written under `models/training_data/RL_testing/{name}` in the
+project, not downloaded through the browser. See [GRPO storage](grpo-storage.md)
+for the manifest, token records, capture worker, and setup requirements.
+
 Run summaries and details expose nullable `queueName`, projected from the saved
 `config.queue.name`. Literal `query` search also matches this name. Queue names
 are display/search metadata; all queue selection, filtering, and stop operations

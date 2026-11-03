@@ -412,6 +412,24 @@ details[open] > summary > svg:last-child { transform: rotate(180deg); }
 .positional-runbar__copy strong { font-size: 12px; font-weight: 500; }
 .positional-runbar__copy small { font-size: 11px; color: var(--muted); line-height: 1.6; }
 .positional-runbar__button { width: 100%; }
+.grpo-collection { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--rule-soft); min-width: 0; }
+.grpo-collection__toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.grpo-collection__toggle input { flex-shrink: 0; width: 17px; height: 17px; margin: 2px 0 0; }
+.grpo-collection__toggle span { display: grid; gap: 6px; min-width: 0; }
+.grpo-collection__toggle strong { font-size: 13px; font-weight: 600; }
+.grpo-collection__toggle small, .grpo-collection__help, .grpo-collection__destination { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.grpo-collection__body { display: grid; gap: 14px; margin-top: 18px; min-width: 0; }
+.grpo-collection__destination code, .grpo-collection__progress code { font: 11px/1.6 var(--mono); overflow-wrap: anywhere; }
+.grpo-collection__help { display: flex; align-items: flex-start; gap: 7px; overflow-wrap: anywhere; }
+.grpo-collection__help > svg { margin-top: 2px; color: var(--success); }
+.grpo-collection__progress { display: grid; gap: 7px; padding: 14px 0; border-top: 1px solid var(--rule-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
+.grpo-collection__progress strong { font-weight: 600; }
+.grpo-collection__progress span, .grpo-collection__progress small, .grpo-collection__progress code { color: var(--ink-soft); line-height: 1.6; }
+.grpo-collection__progress small { font-size: 12px; }
+.grpo-collection__connection { display: grid; gap: 10px; color: var(--danger); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .grpo-collection input[type="text"], .grpo-collection input:not([type]) { font-size: 16px; }
+}
 .positional-run-error { margin: 16px 0 0; }
 .positional-run-error > span { display: grid; gap: 5px; }
 .positional-run-error strong, .positional-run-error small { font-size: 12px; }

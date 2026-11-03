@@ -5,6 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 
+from grpo.routes import require_idle
 from harness.model import (
     ModelResolutionError,
     loaded_lmstudio_models,
@@ -123,6 +124,7 @@ def get_match(match_id: str, request: Request) -> MatchDetail:
     "/matches", response_model=MatchDetail, status_code=status.HTTP_201_CREATED
 )
 async def start_match(request_body: StartMatchRequest, request: Request) -> MatchDetail:
+    require_idle(request)
     try:
         return await _manager(request).start(
             request_body.white_harness_id,

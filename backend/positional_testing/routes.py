@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request, Response, st
 from starlette.concurrency import run_in_threadpool
 
 from app.matches.catalog import UnknownHarnessError
+from grpo.routes import require_idle
 from harness.contracts import HarnessError
 from harness.model import ModelResolutionError
 
@@ -73,6 +74,7 @@ def list_queues(request: Request) -> PositionQueueList:
 
 @router.post("/queues", response_model=PositionQueueDetail, status_code=202)
 async def create_queue(request_body: CreatePositionQueueRequest, request: Request):
+    require_idle(request)
     try:
         return await request.app.state.position_queue.enqueue(request_body)
     except QueueConflictError as exc:
@@ -91,6 +93,7 @@ async def create_queue(request_body: CreatePositionQueueRequest, request: Reques
     status_code=202,
 )
 async def retry_failed_queue(queue_id: UUID, request: Request):
+    require_idle(request)
     try:
         return await request.app.state.position_queue.retry_failed(queue_id)
     except UnknownQueueError as exc:
@@ -259,6 +262,7 @@ async def run_saved_position(
     request_body: RunSavedPositionRequest,
     request: Request,
 ) -> SavedPositionRun:
+    require_idle(request)
     try:
         return await _runner(request).run_once(
             request_body.position_id,

@@ -12,6 +12,8 @@ from codex_training.job_routes import router as codex_jobs_router
 from codex_training.jobs import WorkerJobs
 from codex_training.routes import router as codex_training_router
 from codex_training.service import CodexTrainingService
+from grpo.routes import router as grpo_router
+from grpo.service import GrpoService
 from harness.model import LMStudioModel, OpenAIModel, UnslothModel
 from positional_testing.queue import PositionQueueManager
 from positional_testing.routes import router as positional_testing_router
@@ -68,10 +70,24 @@ def create_app(
             app.state.positional_test_runner, active_catalog, codex_jobs=codex_jobs
         )
         app.state.position_queue = queue_manager
+
+        async def grpo_busy():
+            from starlette.concurrency import run_in_threadpool
+
+            if manager.repository.active_count() or codex_jobs.active_jobs():
+                return True
+            queues = await run_in_threadpool(queue_manager.repository.list_queues)
+            return any(q["status"] in {"queued", "running", "stopping"} for q in queues)
+
+        grpo = GrpoService(
+            app.state.positional_test_runner, active_catalog, busy_check=grpo_busy
+        )
+        app.state.grpo = grpo
         queue_manager.start()
         try:
             yield
         finally:
+            await grpo.close()
             await queue_manager.close()
             await codex_jobs.close()
             await codex_training.close()
@@ -95,6 +111,7 @@ def create_app(
     application.include_router(positional_testing_router)
     application.include_router(codex_training_router)
     application.include_router(codex_jobs_router)
+    application.include_router(grpo_router)
     return application
 
 
