@@ -15,6 +15,7 @@ from harness.contracts import TurnRequest
 from harness.recording import current_recorder
 
 from . import evaluation, run_repository
+from .cancellation import RunConflictError, RunControl, RunDiscardedError
 from .catalog import get_saved_position
 from .models import SavedPositionMove, SavedPositionRun
 from .recording import PassRecorder
@@ -34,11 +35,13 @@ class PositionalTestRunner:
         id_factory: Callable[[], str] | None = None,
         repository=None,
         evaluator=None,
+        active_runs=None,
     ):
         self._catalog = catalog
         self._id_factory = id_factory or (lambda: str(uuid4()))
         self.repository = repository or run_repository.RunRepository()
         self.evaluator = evaluator or evaluation.StockfishEvaluator()
+        self.active_runs = active_runs if active_runs is not None else {}
 
     async def run_once(
         self,
@@ -49,6 +52,63 @@ class PositionalTestRunner:
         queued_run_id: str | None = None,
         config_metadata: dict | None = None,
         cancellation_check: Callable[[], bool] | None = None,
+        run_id: str | None = None,
+        on_cancel: Callable[[], None] | None = None,
+    ) -> SavedPositionRun:
+        identifier = queued_run_id or run_id or self._id_factory()
+        if queued_run_id is None and run_id is not None:
+            if await run_in_threadpool(self.repository.get, identifier) is not None:
+                raise RunConflictError("This run identifier already exists.")
+        if identifier in self.active_runs:
+            raise RunConflictError("This run is already active.")
+        control = RunControl(on_cancel)
+
+        async def cleanup():
+            if control.recorder is not None:
+                await run_in_threadpool(control.recorder.discard)
+            await run_in_threadpool(self.repository.discard_run, identifier)
+            self.active_runs.pop(identifier, None)
+
+        control.cleanup = cleanup
+        self.active_runs[identifier] = control
+        try:
+            result = await self._run_once(
+                position_id,
+                harness_id,
+                model_selection,
+                queued_run_id=queued_run_id,
+                config_metadata=config_metadata,
+                cancellation_check=cancellation_check,
+                run_id=identifier,
+                control=control,
+            )
+            control.check()
+            return result
+        except BaseException:
+            if control.cancelled.is_set():
+                try:
+                    await cleanup()
+                except Exception as exc:
+                    control.discard_error = exc
+                    raise
+                raise RunDiscardedError("Run cancelled and discarded.") from None
+            raise
+        finally:
+            if control.discard_error is None:
+                self.active_runs.pop(identifier, None)
+            control.finished.set()
+
+    async def _run_once(
+        self,
+        position_id,
+        harness_id,
+        model_selection,
+        *,
+        queued_run_id,
+        config_metadata,
+        cancellation_check,
+        run_id,
+        control,
     ) -> SavedPositionRun:
         document = await run_in_threadpool(get_saved_position, position_id)
         if document is None:
@@ -56,7 +116,6 @@ class PositionalTestRunner:
 
         definition = self._catalog.definition(harness_id)
         position = document.position
-        run_id = queued_run_id or self._id_factory()
         config = {
             **(config_metadata or {}),
             "harness_name": definition.name,
@@ -85,12 +144,16 @@ class PositionalTestRunner:
                 config,
             )
         recorder = PassRecorder(self.repository, run_id)
+        control.recorder = recorder
         token = current_recorder.set(recorder)
         try:
-            player, model_name = await self._catalog.create_player(
-                harness_id,
-                cancellation_check or (lambda: False),
-                model_selection=model_selection,
+            control.check()
+            player, model_name = await control.wait(
+                self._catalog.create_player(
+                    harness_id,
+                    cancellation_check or (lambda: False),
+                    model_selection=model_selection,
+                )
             )
             settings = getattr(player, "config", None)
             if is_dataclass(settings):
@@ -98,15 +161,20 @@ class PositionalTestRunner:
             await run_in_threadpool(
                 self.repository.configure, run_id, model_name, config
             )
-            decision = await player.choose_move(
-                TurnRequest(
-                    game_id=run_id,
-                    fen=position.position.fen,
-                    pgn=document.pgn,
-                    side=position.side_to_move,
-                    ply=position.move_count,
+            control.check()
+            decision = await control.wait(
+                player.choose_move(
+                    TurnRequest(
+                        game_id=run_id,
+                        fen=position.position.fen,
+                        pgn=document.pgn,
+                        side=position.side_to_move,
+                        ply=position.move_count,
+                    )
                 )
             )
+        except RunDiscardedError:
+            raise
         except BaseException as exc:
             message = str(exc) or "Run interrupted before a move was submitted."
             try:
@@ -124,9 +192,16 @@ class PositionalTestRunner:
         # failed attempt with failure_stage=evaluation, distinct from execution.
         await run_in_threadpool(self.repository.save_move, run_id, decision.move.uci)
         try:
-            grade = await self.evaluator.evaluate(
-                fen=position.position.fen, pgn=document.pgn, move_uci=decision.move.uci
+            control.check()
+            grade = await control.wait(
+                self.evaluator.evaluate(
+                    fen=position.position.fen,
+                    pgn=document.pgn,
+                    move_uci=decision.move.uci,
+                )
             )
+        except RunDiscardedError:
+            raise
         except BaseException as exc:
             grade = {
                 "evaluation": {

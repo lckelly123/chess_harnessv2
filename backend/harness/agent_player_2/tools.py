@@ -202,6 +202,74 @@ def _piece_locations(pieces) -> str:
     )
 
 
+def validate_tool_state(
+    *,
+    phase: Phase,
+    name: str,
+    arguments: dict[str, str],
+    canonical_fen: str,
+    scratch_moves: list[str],
+    tested_lines: list[TestedLineNode],
+    active_branch_id: str | None,
+) -> dict[str, str]:
+    """Check a proposed call without executing it or changing any harness state.
+
+    Batches allow one board mutation, with annotations executed first. Annotations
+    cannot change legality, branch existence, or verification, so every call can
+    be validated against the same pre-batch state before any tool executes.
+    """
+
+    args = validate_arguments(phase, name, arguments)
+    if moves_to_branch(tested_lines, active_branch_id) != scratch_moves:
+        raise ValueError("Scratch moves do not match the active tested-line branch.")
+    if name == "submit_move":
+        _require_san(canonical_fen, args["move"], "canonical board")
+        branch_id = args["tested_branch"]
+        branch = find_node(tested_lines, branch_id)
+        if branch is None:
+            raise ToolRejected(f"Rejected. Tested branch `{branch_id}` does not exist.")
+        if branch["parent_id"] is not None:
+            raise ToolRejected(
+                f"Rejected. `{branch_id}` is not a base branch. Submit its B-level root."
+            )
+        if branch["move"] != args["move"]:
+            raise ToolRejected(
+                f"Rejected. `{branch_id}` begins with `{branch['move']}`, not `{args['move']}`."
+            )
+        if not base_verification_done(tested_lines, branch_id):
+            raise ToolRejected(
+                f"Rejected. `{branch_id}` is incomplete. Test an opponent reply before submitting."
+            )
+    elif name == "scratch_play_move":
+        if len(scratch_moves) >= MAX_SCRATCH_HALFMOVES:
+            raise ToolRejected(
+                f"Rejected. Scratch branches are limited to {MAX_SCRATCH_HALFMOVES} halfmoves."
+            )
+        active = find_node(tested_lines, active_branch_id)
+        if active is not None and active["terminal"]:
+            raise ToolRejected(
+                f"Rejected. Branch `{active_branch_id}` is already terminal."
+            )
+        board = scratchboard(canonical_fen, scratch_moves)
+        _require_san(board.current_fen, args["move"], "scratchboard")
+    elif name == "annotate_branch":
+        if find_node(tested_lines, args["branch_id"]) is None:
+            raise ToolRejected(
+                f"Rejected. Tested branch `{args['branch_id']}` does not exist yet."
+            )
+    elif name == "inspect_square":
+        if args["board"].lower() not in {"canonical", "scratch"}:
+            raise ToolRejected(
+                "Rejected. `board` must be either `canonical` or `scratch`."
+            )
+        square = args["square"].lower()
+        if re.fullmatch(r"[a-h][1-8]", square) is None:
+            raise ToolRejected(
+                f"Rejected. `{square}` is not a valid square. Select a square from a1 through h8."
+            )
+    return args
+
+
 @traceable(run_type="tool", name="chess tool")
 def execute_tool(
     *,
@@ -216,30 +284,19 @@ def execute_tool(
 ) -> dict[str, Any]:
     """Return copied branch/scratch state. Never mutate the caller's state."""
 
-    args = validate_arguments(phase, name, arguments)
+    args = validate_tool_state(
+        phase=phase,
+        name=name,
+        arguments=arguments,
+        canonical_fen=canonical_fen,
+        scratch_moves=scratch_moves,
+        tested_lines=tested_lines,
+        active_branch_id=active_branch_id,
+    )
     nodes = copy_nodes(tested_lines)
-    tree_moves = moves_to_branch(nodes, active_branch_id)
-    if tree_moves != scratch_moves:
-        raise ValueError("Scratch moves do not match the active tested-line branch.")
 
     if name == "submit_move":
-        _require_san(canonical_fen, args["move"], "canonical board")
         branch_id = args["tested_branch"]
-        branch = find_node(nodes, branch_id)
-        if branch is None:
-            raise ToolRejected(f"Rejected. Tested branch `{branch_id}` does not exist.")
-        if branch["parent_id"] is not None:
-            raise ToolRejected(
-                f"Rejected. `{branch_id}` is not a base branch. Submit its B-level root."
-            )
-        if branch["move"] != args["move"]:
-            raise ToolRejected(
-                f"Rejected. `{branch_id}` begins with `{branch['move']}`, not `{args['move']}`."
-            )
-        if not base_verification_done(nodes, branch_id):
-            raise ToolRejected(
-                f"Rejected. `{branch_id}` is incomplete. Test an opponent reply before submitting."
-            )
         return {
             "terminal": True,
             "scratch_moves": list(scratch_moves),
@@ -256,17 +313,7 @@ def execute_tool(
 
     board = scratchboard(canonical_fen, scratch_moves)
     if name == "scratch_play_move":
-        if len(scratch_moves) >= MAX_SCRATCH_HALFMOVES:
-            raise ToolRejected(
-                f"Rejected. Scratch branches are limited to {MAX_SCRATCH_HALFMOVES} halfmoves."
-            )
-        active = find_node(nodes, active_branch_id)
-        if active is not None and active["terminal"]:
-            raise ToolRejected(
-                f"Rejected. Branch `{active_branch_id}` is already terminal."
-            )
         actor_side = position_status(board.current_fen).side_to_move
-        _require_san(board.current_fen, args["move"], "scratchboard")
         identity = board.play(args["move"]).move
         branch = find_child(nodes, active_branch_id, identity.san)
         reused = branch is not None
@@ -346,12 +393,7 @@ def execute_tool(
         summary = "Scratchboard reset to canonical; the tested-line tree was preserved."
     elif name == "annotate_branch":
         branch_id = args["branch_id"]
-        try:
-            branch = require_node(nodes, branch_id)
-        except KeyError as exc:
-            raise ToolRejected(
-                f"Rejected. Tested branch `{branch_id}` does not exist yet."
-            ) from exc
+        branch = require_node(nodes, branch_id)
         previous = branch["annotation"]
         branch["annotation"] = args["annotation"]
         result = {
@@ -365,14 +407,6 @@ def execute_tool(
     elif name == "inspect_square":
         selected = args["board"].lower()
         square = args["square"].lower()
-        if selected not in {"canonical", "scratch"}:
-            raise ToolRejected(
-                "Rejected. `board` must be either `canonical` or `scratch`."
-            )
-        if re.fullmatch(r"[a-h][1-8]", square) is None:
-            raise ToolRejected(
-                f"Rejected. `{square}` is not a valid square. Select a square from a1 through h8."
-            )
         fen = canonical_fen if selected == "canonical" else board.current_fen
         inspection = inspect_square(fen, square, perspective=side)
         result = {

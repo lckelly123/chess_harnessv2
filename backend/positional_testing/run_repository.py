@@ -87,6 +87,12 @@ class RunRepository:
                 ),
             )
 
+    def discard_run(self, run_id):
+        """Only the live runner calls this, after stopping its recorder and work."""
+        with self.connection() as conn:
+            lock_state(conn)
+            conn.execute("DELETE FROM model_runs WHERE id = %s", (run_id,))
+
     def configure(self, run_id, model, config):
         with self.connection() as conn:
             conn.execute(

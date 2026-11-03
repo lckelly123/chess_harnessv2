@@ -212,6 +212,9 @@ class HarnessCatalog:
                 cancellation_check,
             )
         if harness_id == AGENT_PLAYER_2_ID:
+            # chess_harness resamples the same request with its normal settings.
+            settings.pop("retry_reasoning_effort", None)
+            settings.pop("retry_max_output_tokens", None)
             return AgentPlayer2(
                 resolved.client,
                 AgentPlayer2Config(**settings),

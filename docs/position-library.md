@@ -86,7 +86,7 @@ ordered messages, native tool history/definitions, and generation settings. It
 commits the returned response envelope before checking status or parsing tools.
 Provider-exposed text, native arguments, and opaque continuation fields are retained;
 credentials, HTTP headers, and tracing metadata are excluded. Retries have their
-own pass and snapshots. Transport failures/cancellations retain any committed
+own pass and snapshots. Transport failures and stops that retain the attempt keep any committed
 input with a null output; recording never fabricates a response. Existing passes
 have null snapshots, and their prompts cannot be reconstructed retrospectively.
 
@@ -129,6 +129,27 @@ request prevents its late response from opening the viewer. Legacy passes have
 a disabled Expand action. The run detail response includes only
 `hasModelExchange`; the full payload is fetched on demand from the per-pass
 exchange endpoint.
+
+## Cancel an active attempt
+
+Use **Cancel run** beside a single-position run or **Cancel current run** beside
+the active queue position. Both act immediately without a confirmation dialog,
+for standard and Codex harnesses, including while Stockfish is grading. The hint
+explains that cancellation discards the attempt and its saved passes. Successful
+cleanup removes the run, notes, tool calls, model exchanges, move, and grade from
+history while preserving the source position and other attempts.
+
+A queue continues with its next position. Its counts and results reflect the
+remaining run rows, with no failed or skipped placeholder for the discarded
+attempt. If **Stop after current** was already requested, the queue stops after
+discarding the current attempt. Stop after current alone still finishes and saves
+the active attempt, then skips unstarted positions.
+
+The control shows **Cancelling…** until cleanup finishes. A cleanup error appears
+separately from model/grading errors and offers **Retry discard** for the same run,
+even if a queue has advanced. A run that is no longer active returns 404/409 and
+refreshes the visible state; any completed result stays saved. The cancel endpoint
+returns 204 only after cleanup and 503 for a retryable database cleanup failure.
 
 ## Automatic run evaluation
 
@@ -323,10 +344,10 @@ items become scheduled run rows. Existing evaluation failures are normalized to
 The four superseded tables are removed transactionally, without CASCADE; an
 unexpected dependency rolls back the upgrade. Back up the volume before upgrading.
 
-Docker configures `POSITION_QUEUE_ITEM_TIMEOUT_SECONDS` to 2700 seconds (45 minutes)
+Docker configures `POSITION_QUEUE_ITEM_TIMEOUT_SECONDS` to 5000 seconds (83 minutes 20 seconds)
 per position for the entire model turn plus grading. A timed-out run is flagged
-and the next begins. A standalone backend without this environment setting keeps
-its 1800-second fallback. The timeout is read at backend startup; changing `.env`
+and the next begins. A standalone backend without this environment setting uses
+the same 5000-second default. The timeout is read at backend startup; changing `.env`
 or Compose does not change the running queue's deadline. Apply a new value with
 `docker compose up -d --no-deps backend`. This interrupts any active position,
 retains its trace as a failed attempt, and resumes pending positions using the new

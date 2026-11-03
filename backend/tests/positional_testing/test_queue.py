@@ -136,6 +136,71 @@ async def queue_with_failures(manager, request):
 
 
 @pytest.mark.parametrize("codex", [False, True])
+def test_discard_current_run_removes_history_and_allows_next_position(queue_env, codex):
+    manager, request = queue_env
+    manager.catalog.fail_at = None
+    manager.catalog.wait_at = 1
+    manager.runner.evaluator.fail_at = None
+
+    async def scenario():
+        if codex:
+            training = CodexTrainingService(
+                manager.runner.repository,
+                manager.runner.evaluator,
+                active_runs=manager.runner.active_runs,
+            )
+            manager.codex_jobs = WorkerJobs(training)
+            manager.codex_jobs.heartbeat(
+                {
+                    "worker_id": "fixture",
+                    "model": "teacher",
+                    "reasoning_effort": "xhigh",
+                    "cli_version": "fixture",
+                }
+            )
+            request.harness_id = "codex-training"
+        queued = await manager.enqueue(request)
+        queue, item = manager.repository.claim_next()
+        run_id = str(item["run_id"])
+        task = asyncio.create_task(manager.execute_item(queue, item))
+        await wait_until(lambda: run_id in manager.runner.active_runs)
+        await wait_until(
+            lambda: manager.runner.active_runs[run_id].recorder is not None
+        )
+        recorder = manager.runner.active_runs[run_id].recorder
+        if codex:
+            await wait_until(lambda: training.sessions[run_id].status == "waiting")
+        else:
+            await wait_until(lambda: manager.catalog.inflight == 1)
+        if not codex:
+            recorder.begin({"phase": "synthesis"})
+            recorder.capture_input({"input": "fixture"})
+        await manager.runner.active_runs[run_id].discard()
+        await task
+        assert manager.runner.repository.get(run_id) is None
+        recorder.capture_output({"output": "late"})
+        assert manager.runner.repository.get(run_id) is None
+        result = manager.repository.get_queue(queued["id"])
+        assert result["failed"] == 0
+        assert result["total"] == queued["total"] - 1
+        assert result["pending"] == queued["total"] - 1
+        assert not any(str(row["run_id"]) == run_id for row in result["items"])
+        next_queue, next_item = manager.repository.claim_next()
+        assert next_item["ordinal"] == item["ordinal"] + 1
+        if codex:
+            assert not manager.codex_jobs.active_jobs()
+            await training.close()
+        else:
+            await manager.execute_item(next_queue, next_item)
+            assert (
+                manager.runner.repository.get(next_item["run_id"])["status"]
+                == "completed"
+            )
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("codex", [False, True])
 def test_retry_failed_and_skipped_in_place_preserves_traces_and_settings(
     queue_env, codex
 ):

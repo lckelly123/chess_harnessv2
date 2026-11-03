@@ -113,6 +113,7 @@ export interface PositionalTestPositionList {
 }
 
 export interface RunPositionalTestInput {
+  runId?: string;
   positionId: string;
   harnessId: string;
   modelSelection?: ModelSelection;
@@ -312,5 +313,6 @@ export interface MatchApi {
   getModelRunFilters(): Promise<ModelRunFilterOptions>;
   getModelRun(runId: string): Promise<ModelRunDetail>;
   deleteModelRun(runId: string): Promise<void>;
+  cancelModelRun(runId: string): Promise<void>;
   getModelPassExchange(runId: string, passNumber: number): Promise<ModelPassExchange>;
 }

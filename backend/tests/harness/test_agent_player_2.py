@@ -1,4 +1,6 @@
 import asyncio
+from copy import deepcopy
+from unittest.mock import patch
 
 import pytest
 from conftest import (
@@ -11,13 +13,15 @@ from conftest import (
 
 from app.matches.catalog import AGENT_PLAYER_2_ID, HarnessCatalog
 from harness.agent_player_2 import AgentConfig, AgentPlayer2
+from harness.agent_player_2.nodes import SynthesisNodes
+from harness.agent_player_2.prompt_builder import build_prompt
 from harness.agent_player_2.state import initial_state
 from harness.agent_player_2.tools import (
     ToolRejected,
     execute_tool,
     validate_tool_batch,
 )
-from harness.contracts import TurnRequest
+from harness.contracts import HarnessError, TurnCancelled, TurnRequest
 from harness.protocol import ToolProtocolError
 
 
@@ -198,14 +202,16 @@ def test_missing_running_thoughts_forces_retry_without_executing_tool(
 
     assert result.move.san == "e4"
     assert model.calls[1]["forced_retry"]
-    assert (
-        "exactly one complete <running_thoughts> block"
-        in model.calls[1]["dynamic_input"]
-    )
+    assert model.calls[1]["dynamic_input"] == model.calls[0]["dynamic_input"]
+    assert model.calls[1]["instructions"] == model.calls[0]["instructions"]
+    assert model.calls[1]["reasoning_effort"] == "medium"
+    assert model.calls[1]["max_output_tokens"] == 2000
     assert "No tested lines yet." in model.calls[1]["dynamic_input"]
 
 
-def test_rejected_batch_rolls_back_annotation_before_retry(request_position) -> None:
+def test_rejected_batch_does_not_execute_annotation_before_retry(
+    request_position,
+) -> None:
     rolled_back_annotation = "e4 is already fully verified and ready to submit."
     model = ScriptedModel(
         [
@@ -247,7 +253,15 @@ def test_rejected_batch_rolls_back_annotation_before_retry(request_position) -> 
     )
     agent = AgentPlayer2(model, AgentConfig(model="test-model"))
 
-    result = asyncio.run(agent.choose_move(request_position))
+    with patch(
+        "harness.agent_player_2.nodes.execute_tool", wraps=execute_tool
+    ) as executed:
+        result = asyncio.run(agent.choose_move(request_position))
+    assert len(executed.call_args_list) == 4
+    assert all(
+        call.kwargs["arguments"].get("annotation") != rolled_back_annotation
+        for call in executed.call_args_list
+    )
     retry_input = model.calls[2]["dynamic_input"]
     tested_lines = retry_input.split("# Tested Lines", 1)[1]
 
@@ -255,8 +269,185 @@ def test_rejected_batch_rolls_back_annotation_before_retry(request_position) -> 
     assert rolled_back_annotation not in tested_lines
     assert "Annotation: None yet" in tested_lines
     assert "Verification: 1/2 halfmoves tested" in tested_lines
-    assert "Rolled back because the tool batch was rejected" in retry_input
-    assert "Tested branch `B9` does not exist" in retry_input
+    assert retry_input == model.calls[1]["dynamic_input"]
+    assert "Tested branch `B9` does not exist" not in retry_input
+
+
+@pytest.mark.parametrize(
+    "invalid_tool",
+    ["submit_move", "scratch_play_move", "inspect_square", "annotate_branch"],
+)
+def test_entire_state_survives_a_rejected_batch(request_position, invalid_tool):
+    state = initial_state(request_position)
+    state.update(
+        execute_tool(
+            phase="synthesis",
+            name="scratch_play_move",
+            arguments={"move": "e4"},
+            canonical_fen=state["canonical_fen"],
+            side=state["side"],
+            scratch_moves=[],
+            tested_lines=[],
+            active_branch_id=None,
+        )
+    )
+    state["running_thoughts"] = "Accepted notes: need to check Black's reply."
+    state["latest_tool_results"] = [
+        {"tool": "scratch_play_move", "ok": True, "result_summary": "Played e4."}
+    ]
+    state["history"] = [{"type": "tool_call", "tool": "scratch_play_move"}]
+    args = {
+        "submit_move": {
+            "move": "e4",
+            "tested_branch": "B1",
+            "decision_summary": JUSTIFICATION,
+        },
+        "scratch_play_move": {"move": "e4"},  # Black to move now.
+        "inspect_square": {"board": "scratch", "square": "z9"},
+        "annotate_branch": {"branch_id": "B9", "annotation": "Missing branch."},
+    }[invalid_tool]
+    response = thoughtful_batch(
+        {
+            "tool": "annotate_branch",
+            "arguments": {"branch_id": "B1", "annotation": "Must not be committed."},
+        },
+        {"tool": invalid_tool, "arguments": args},
+        running_thoughts="Rejected notes must not replace the accepted notes.",
+    )
+    model = ScriptedModel([response])
+    nodes = SynthesisNodes(model, AgentConfig(model="offline"))
+    before = deepcopy(state)
+    with patch(
+        "harness.agent_player_2.nodes.execute_tool", wraps=execute_tool
+    ) as executed:
+        after = asyncio.run(nodes.synthesis(state))
+        if after["pending_tools"]:
+            after = nodes.synthesis_tools(after)
+        executed.assert_not_called()
+    for key in (
+        "canonical_fen",
+        "scratch_moves",
+        "tested_lines",
+        "active_branch_id",
+        "running_thoughts",
+        "latest_tool_results",
+        "history",
+        "decision",
+        "tool_calls",
+    ):
+        assert after[key] == before[key], key
+    assert state == before
+    assert after["forced_retry"]
+    assert after["pending_tools"] == []
+    assert build_prompt(after) == build_prompt(before)
+
+
+@pytest.mark.parametrize(
+    "bad_response",
+    [
+        {"status": "completed", "output_text": "I need to think more."},
+        thoughtful_call("annotate_branch", branch_id="B1", annotation="x" * 601),
+        thoughtful_call("scratch_play_move", move="e5"),
+        {
+            **thoughtful_call("scratch_play_move", move="e4"),
+            "status": "incomplete",
+            "incomplete_details": {"reason": "max_output_tokens"},
+        },
+    ],
+)
+def test_ten_additional_attempts_reuse_identical_input_and_settings(
+    request_position, bad_response
+):
+    model = ScriptedModel([deepcopy(bad_response) for _ in range(11)])
+    agent = AgentPlayer2(
+        model,
+        AgentConfig(model="offline", reasoning_effort="high", max_output_tokens=3500),
+    )
+    with patch(
+        "harness.agent_player_2.nodes.execute_tool", wraps=execute_tool
+    ) as executed:
+        with pytest.raises(HarnessError, match="exhausted 10 same-input retries"):
+            asyncio.run(agent.choose_move(request_position))
+        executed.assert_not_called()
+    assert len(model.calls) == 11
+    first = {k: v for k, v in model.calls[0].items() if k != "forced_retry"}
+    assert all(
+        {k: v for k, v in c.items() if k != "forced_retry"} == first
+        for c in model.calls
+    )
+    assert not model.calls[0]["forced_retry"]
+    assert all(c["forced_retry"] for c in model.calls[1:])
+    assert first["max_output_tokens"] == 3500
+    assert first["reasoning_effort"] == "high"
+
+
+def test_retry_count_resets_after_an_accepted_batch(request_position):
+    model = ScriptedModel(
+        [
+            *[{} for _ in range(10)],
+            thoughtful_call("scratch_play_move", move="e4"),
+            *[thoughtful_call("scratch_play_move", move="e4") for _ in range(10)],
+            thoughtful_call("scratch_play_move", move="e5"),
+            thoughtful_call(
+                "submit_move",
+                move="e4",
+                tested_branch="B1",
+                decision_summary=JUSTIFICATION,
+            ),
+        ]
+    )
+    agent = AgentPlayer2(model, AgentConfig(model="offline"))
+    result = asyncio.run(agent.choose_move(request_position))
+    assert result.move.san == "e4"
+    assert len(model.calls) == 23
+    assert not model.calls[11]["forced_retry"]
+    assert not model.calls[22]["forced_retry"]
+    assert model.calls[0]["dynamic_input"] != model.calls[11]["dynamic_input"]
+
+
+def test_retry_uses_captured_input_without_rebuilding_it(request_position):
+    model = ScriptedModel([{}, *verified_e4_responses()])
+    original_prompt = build_prompt(initial_state(request_position))
+    with patch(
+        "harness.agent_player_2.nodes.build_prompt", return_value=original_prompt
+    ) as builder:
+        result = asyncio.run(
+            AgentPlayer2(model, AgentConfig(model="offline")).choose_move(
+                request_position
+            )
+        )
+    assert result.move.san == "e4"
+    assert builder.call_count == 3  # Once per accepted pass, never again for its retry.
+
+
+def test_provider_failure_is_not_resampled(request_position):
+    model = ScriptedModel([HarnessError("Unsloth timed out")])
+    with pytest.raises(HarnessError, match="Unsloth timed out"):
+        asyncio.run(
+            AgentPlayer2(model, AgentConfig(model="offline")).choose_move(
+                request_position
+            )
+        )
+    assert len(model.calls) == 1
+
+
+def test_cancellation_and_model_budget_stop_retrying(request_position):
+    model = ScriptedModel([{}, {}])
+    with pytest.raises(HarnessError, match="model-call limit"):
+        asyncio.run(
+            AgentPlayer2(
+                model, AgentConfig(model="offline", max_model_calls=2)
+            ).choose_move(request_position)
+        )
+    assert len(model.calls) == 2
+    model = ScriptedModel([{}])
+    with pytest.raises(TurnCancelled):
+        asyncio.run(
+            AgentPlayer2(model, AgentConfig(model="offline"), lambda: True).choose_move(
+                request_position
+            )
+        )
+    assert model.calls == []
 
 
 def test_scratch_navigation_preserves_and_reuses_tested_branches(

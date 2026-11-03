@@ -5,6 +5,8 @@ import pytest
 from app.matches.catalog import HARNESSES, UnknownHarnessError
 from chess_core import normalize_move
 from harness.contracts import MoveDecision
+from harness.recording import current_recorder
+from positional_testing.cancellation import RunConflictError, RunDiscardedError
 from positional_testing.runner import PositionalTestRunner, UnknownSavedPositionError
 
 
@@ -37,6 +39,133 @@ class FakeCatalog:
         self.definition(harness_id)
         assert cancellation_check() is False
         return self.player, "loaded-model"
+
+
+@pytest.mark.parametrize("during_grading", [False, True])
+def test_cancel_discards_run_passes_and_late_writes(
+    library_rows, run_store, during_grading
+):
+    async def scenario():
+        entered = asyncio.Event()
+        stopped = asyncio.Event()
+        recorder = None
+
+        class Player(RecordingPlayer):
+            async def choose_move(self, request):
+                nonlocal recorder
+                recorder = current_recorder.get()
+                recorder.begin({"phase": "synthesis"})
+                recorder.capture_input({"input": "fixture"})
+                if not during_grading:
+                    entered.set()
+                    try:
+                        await asyncio.Event().wait()
+                    finally:
+                        stopped.set()
+                return await super().choose_move(request)
+
+        class Evaluator:
+            async def evaluate(self, **kwargs):
+                entered.set()
+                try:
+                    await asyncio.Event().wait()
+                finally:
+                    stopped.set()
+
+        runner = PositionalTestRunner(FakeCatalog(Player()), evaluator=Evaluator())
+        run_store.create("other", library_rows[0]["id"], "old", "old", {})
+        run_store.finish("other", move="e4e5")
+        task = asyncio.create_task(
+            runner.run_once(
+                library_rows[0]["id"],
+                "agent-player-2-langgraph-v1",
+                run_id="discard-me",
+            )
+        )
+        await asyncio.wait_for(entered.wait(), 3)
+        assert run_store.get("discard-me")["passes"]
+        control = runner.active_runs["discard-me"]
+        await asyncio.gather(control.discard(), control.discard())
+        with pytest.raises(RunDiscardedError):
+            await task
+        assert stopped.is_set()
+        assert not runner.active_runs
+        assert run_store.get("discard-me") is None
+        assert run_store.get("other")["status"] == "completed"
+        # Emulate a synchronous graph node returning after its asyncio task stopped.
+        recorder.begin({"phase": "synthesis"})
+        recorder.capture_input({"input": "late"})
+        recorder.capture_output({"output": "late"})
+        recorder.fail(RuntimeError("late"))
+        assert not run_store.passes
+        assert not run_store.exchanges
+
+    asyncio.run(scenario())
+
+
+def test_discard_retries_failed_cleanup_without_rerunning_model(
+    library_rows, run_store, monkeypatch
+):
+    async def scenario():
+        entered = asyncio.Event()
+        calls = 0
+
+        class Player(RecordingPlayer):
+            async def choose_move(self, request):
+                nonlocal calls
+                calls += 1
+                recorder = current_recorder.get()
+                recorder.begin({"phase": "synthesis"})
+                recorder.capture_input({"input": "fixture"})
+                entered.set()
+                await asyncio.Event().wait()
+
+        runner = PositionalTestRunner(FakeCatalog(Player()))
+        task = asyncio.create_task(
+            runner.run_once(
+                library_rows[0]["id"],
+                "agent-player-2-langgraph-v1",
+                run_id="retry-discard",
+            )
+        )
+        await asyncio.wait_for(entered.wait(), 3)
+        original_discard = run_store.discard_run
+
+        def unavailable(run_id):
+            raise RuntimeError("Database temporarily unavailable")
+
+        monkeypatch.setattr(run_store, "discard_run", unavailable)
+        control = runner.active_runs["retry-discard"]
+        with pytest.raises(RuntimeError, match="Database temporarily unavailable"):
+            await control.discard()
+        with pytest.raises(RuntimeError, match="Database temporarily unavailable"):
+            await task
+        assert control.finished.is_set()
+        assert runner.active_runs["retry-discard"] is control
+        assert run_store.get("retry-discard") is not None
+
+        monkeypatch.setattr(run_store, "discard_run", original_discard)
+        await asyncio.gather(control.discard(), control.discard())
+        assert run_store.get("retry-discard") is None
+        assert not run_store.passes
+        assert not run_store.exchanges
+        assert not runner.active_runs
+        assert calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_reusing_run_id_cannot_replace_existing_history(library_rows, run_store):
+    run_store.create("existing", library_rows[0]["id"], "old", "old", {})
+    runner = PositionalTestRunner(FakeCatalog(RecordingPlayer()))
+    with pytest.raises(RunConflictError):
+        asyncio.run(
+            runner.run_once(
+                library_rows[0]["id"], "agent-player-2-langgraph-v1", run_id="existing"
+            )
+        )
+    assert run_store.get("existing")["model"] == "old"
+    assert not runner.active_runs
 
 
 def test_runs_exactly_one_turn_from_database_history(library_rows) -> None:

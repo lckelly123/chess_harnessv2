@@ -50,6 +50,7 @@ class SavedPositionList(PositionalTestingModel):
 
 
 class RunSavedPositionRequest(PositionalTestingModel):
+    run_id: UUID | None = None
     position_id: str = Field(min_length=1, max_length=240)
     harness_id: str = Field(min_length=1, max_length=120)
     model_selection: ModelSelection | None = None

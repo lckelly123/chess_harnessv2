@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from app.matches.catalog import AGENT_PLAYER_2_ID
 from app.models import ModelSelection
 
+from .cancellation import RunDiscardedError
 from .catalog import InvalidSavedPositionError
 from .models import CodexQueueSelection
 from .queue_repository import (
@@ -34,7 +35,7 @@ class PositionQueueManager:
         self.item_timeout = (
             item_timeout
             if item_timeout is not None
-            else float(os.getenv("POSITION_QUEUE_ITEM_TIMEOUT_SECONDS", "1800"))
+            else float(os.getenv("POSITION_QUEUE_ITEM_TIMEOUT_SECONDS", "5000"))
         )
         if self.item_timeout <= 0:
             raise ValueError("Queue item timeout must be positive.")
@@ -177,6 +178,9 @@ class PositionQueueManager:
                         evaluation.get("error")
                         or "The move was saved but evaluation did not finish."
                     )
+        except RunDiscardedError:
+            # The live runner removed this attempt and its passes. Keep consuming.
+            return
         except asyncio.CancelledError:
             # Shutdown preserves the failed attempt. The next worker continues
             # with unstarted positions; it never silently retries a paid call.
@@ -215,6 +219,8 @@ class PositionQueueManager:
             # Queue timeouts/shutdown must cleanly stop the independent teacher task.
             await asyncio.shield(training.tasks[run_id])
             session = training.sessions[run_id]
+            if session.metadata.get("discarded"):
+                raise RunDiscardedError("Run cancelled and discarded.")
             if session.result is None:
                 raise RuntimeError(
                     session.error or "Codex training did not submit a move."

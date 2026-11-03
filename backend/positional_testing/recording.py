@@ -4,6 +4,7 @@ import json
 import re
 from copy import deepcopy
 from datetime import UTC, datetime
+from threading import RLock
 
 from harness.model import visible_output
 
@@ -18,10 +19,17 @@ class PassRecorder:
         self.run_id = run_id
         self.number = 0
         self.current = None
+        self._write_lock = RLock()
+        self._discarded = False
 
     def save(self):
-        if self.current is not None:
-            self.repository.save_pass(self.current)
+        with self._write_lock:
+            if not self._discarded and self.current is not None:
+                self.repository.save_pass(self.current)
+
+    def discard(self):
+        with self._write_lock:
+            self._discarded = True
 
     def begin(self, state):
         self.number += 1
@@ -88,16 +96,18 @@ class PassRecorder:
         self.save()
 
     def capture_input(self, payload):
-        if self.current is not None:
-            self.repository.save_pass_exchange(
-                self.run_id, self.number, model_input=deepcopy(payload)
-            )
+        with self._write_lock:
+            if not self._discarded and self.current is not None:
+                self.repository.save_pass_exchange(
+                    self.run_id, self.number, model_input=deepcopy(payload)
+                )
 
     def capture_output(self, payload):
-        if self.current is not None:
-            self.repository.save_pass_exchange(
-                self.run_id, self.number, model_output=deepcopy(payload)
-            )
+        with self._write_lock:
+            if not self._discarded and self.current is not None:
+                self.repository.save_pass_exchange(
+                    self.run_id, self.number, model_output=deepcopy(payload)
+                )
 
     @staticmethod
     def call(value, call_id=None):
@@ -170,8 +180,11 @@ class PassRecorder:
             return
         events = after.get("events", [])[len(before.get("events", [])) :]
         for event in events:
-            if event.get("type") == "forced_tool_retry":
+            if event.get("type") in {"forced_tool_retry", "response_retry"}:
                 self.current.update(status="failed", error=event["reason"])
+                index = event.get("failed_tool_index")
+                if index is not None and index < len(self.current["tool_calls"]):
+                    self.current["tool_calls"][index]["error"] = event["reason"]
             if event.get("type") != "tool_call":
                 continue
             index = event.get("batch_index", 0)

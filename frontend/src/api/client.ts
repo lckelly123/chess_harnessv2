@@ -43,6 +43,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const matchApi: MatchApi = {
+  cancelModelRun: (id) => request<void>(`/api/positional-testing/runs/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
   listLoadedModels: (server) => request<LoadedModelList>(`/api/models?server=${server}`),
   listPositionQueues: () => request<PositionQueueList>("/api/positional-testing/queues"),
   getPositionQueue: (id) => request<PositionQueueDetail>(`/api/positional-testing/queues/${encodeURIComponent(id)}`),

@@ -4,11 +4,13 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request, Response, status
+from starlette.concurrency import run_in_threadpool
 
 from app.matches.catalog import UnknownHarnessError
 from harness.contracts import HarnessError
 from harness.model import ModelResolutionError
 
+from .cancellation import RunConflictError, RunDiscardedError
 from .catalog import (
     InvalidSavedPositionError,
     PositionLibraryUnavailableError,
@@ -40,6 +42,23 @@ router = APIRouter(prefix="/api/positional-testing", tags=["positional testing"]
 
 def _runner(request: Request) -> PositionalTestRunner:
     return request.app.state.positional_test_runner
+
+
+@router.post("/runs/{run_id}/cancel", status_code=204)
+async def cancel_run(run_id: UUID, request: Request):
+    runner = _runner(request)
+    control = runner.active_runs.get(str(run_id))
+    try:
+        if control is None:
+            row = await run_in_threadpool(runner.repository.get, str(run_id))
+            raise HTTPException(
+                status_code=409 if row else 404,
+                detail="This run is no longer active. Refresh to see its current status.",
+            )
+        await control.discard()
+    except PositionLibraryUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return Response(status_code=204)
 
 
 @router.get("/queues", response_model=PositionQueueList)
@@ -245,7 +264,10 @@ async def run_saved_position(
             request_body.position_id,
             request_body.harness_id,
             model_selection=request_body.model_selection,
+            run_id=str(request_body.run_id) if request_body.run_id else None,
         )
+    except (RunDiscardedError, RunConflictError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except UnknownSavedPositionError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

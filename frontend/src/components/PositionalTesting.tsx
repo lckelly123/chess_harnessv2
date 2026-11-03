@@ -7,7 +7,7 @@ import {
   RotateCcw,
   Square,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, matchApi } from "../api/client";
 import { CODEX_TRAINING_ID, codexApi, type CodexJob, type CodexWorkerStatus } from "../api/codex";
 import { CodexTrainingChoice } from "./CodexTrainingChoice";
@@ -60,6 +60,12 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   const [codexRunId, setCodexRunId] = useState<string | null>(null);
   const [codexJob, setCodexJob] = useState<CodexJob | null>(null);
   const [codexConnectionError, setCodexConnectionError] = useState<string | null>(null);
+  const [singleRunId, setSingleRunId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [runNotice, setRunNotice] = useState<string | null>(null);
+  const discarding = useRef(new Set<string>());
+  const singleOutcome = useRef<{ runId: string; result: PositionalTestRun | null } | null>(null);
   const isCodex = selectedHarnessId === CODEX_TRAINING_ID;
 
   useEffect(() => {
@@ -70,7 +76,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
         const worker = await codexApi.worker();
         if (cancelled) return;
         setCodexWorker(worker);
-        if (worker.active_run_id && !worker.active_queue_id) setCodexRunId((current) => current ?? worker.active_run_id);
+        if (worker.active_run_id && !worker.active_queue_id && !discarding.current.has(worker.active_run_id)) setCodexRunId((current) => current ?? worker.active_run_id);
       } catch {
         if (!cancelled) setCodexWorker(null);
       } finally {
@@ -89,6 +95,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
       try {
         const job = await codexApi.job(codexRunId);
         if (cancelled) return;
+        if (discarding.current.has(codexRunId)) return;
         if (job.queue_tag) { setCodexRunId(null); return; }
         setCodexJob(job);
         setCodexConnectionError(null);
@@ -106,6 +113,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
         onRunningChange(true);
       } catch (caught) {
         if (cancelled) return;
+        if (discarding.current.has(codexRunId)) return;
         if (caught instanceof ApiError && caught.status === 404) {
           setRunError("The live Codex session ended after a backend restart. Open run history for the saved passes.");
           setCodexRunId(null);
@@ -119,7 +127,7 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
     };
     void poll();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [codexRunId, onRunningChange]);
+  }, [codexRunId, onRunningChange, cancelling]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +196,8 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   }, [runResult, selectedPosition]);
 
   const clearRun = () => {
+    setCancelError(null);
+    setRunNotice(null);
     setInspectedRunId(undefined);
     setRunError(null);
     setRunResult(null);
@@ -209,6 +219,8 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
   const runOnce = async () => {
     if (!selectedPosition || !selectedHarness || running || queueActive || !(isCodex ? codexWorker?.online : modelReady)) return;
     onRunningChange(true);
+    setRunNotice(null);
+    setCancelError(null);
     setRunError(null);
     setRunResult(null);
     if (isCodex) {
@@ -225,25 +237,59 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
       }
       return;
     }
+    const runId = crypto.randomUUID();
+    singleOutcome.current = null;
+    setSingleRunId(runId);
+    setRunNotice(null);
     try {
       const result = await matchApi.runPositionalTest({
+        runId,
         positionId: selectedPosition.id,
         harnessId: selectedHarness.id,
         modelSelection,
       });
-      setRunResult(result);
+      singleOutcome.current = { runId, result };
+      if (!discarding.current.has(runId)) setRunResult(result);
     } catch (caught) {
-      setRunError(caught instanceof Error ? caught.message : "The positional test could not be completed.");
+      singleOutcome.current = { runId, result: null };
+      if (!discarding.current.has(runId)) setRunError(caught instanceof Error ? caught.message : "The positional test could not be completed.");
     } finally {
-      setHistoryRevision((value) => value + 1);
-      onRunningChange(false);
+      if (!discarding.current.has(runId)) {
+        setSingleRunId(null);
+        setHistoryRevision((value) => value + 1);
+        onRunningChange(false);
+      }
     }
   };
 
-  const stopCodex = async () => {
-    if (!codexRunId) return;
-    try { setCodexJob(await codexApi.stop(codexRunId)); }
-    catch (caught) { setCodexConnectionError(caught instanceof Error ? caught.message : "Could not stop Codex. Try Stop again."); }
+  const cancelRun = async () => {
+    const runId = codexRunId ?? singleRunId;
+    if (!runId || cancelling) return;
+    discarding.current.add(runId);
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await matchApi.cancelModelRun(runId);
+      setCodexRunId(null);
+      setSingleRunId(null);
+      clearRun();
+      setRunNotice("Run discarded. Its passes and results have been removed.");
+      setHistoryRevision((value) => value + 1);
+      onRunningChange(false);
+    } catch (caught) {
+      if (caught instanceof ApiError && [404, 409].includes(caught.status)) {
+        discarding.current.delete(runId);
+        if (singleOutcome.current?.runId === runId) {
+          setRunResult(singleOutcome.current.result);
+          setSingleRunId(null);
+          setHistoryRevision((value) => value + 1);
+          onRunningChange(false);
+        }
+      }
+      setCancelError(caught instanceof Error ? caught.message : "Could not cancel and discard the run. Try again.");
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const retryPositions = async () => {
@@ -290,7 +336,10 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
         <a href="#positional-run-history">View run history</a>
       </header>
 
-      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} modelReady={modelReady} codexWorker={codexWorker} singleRunning={running} onActiveChange={setQueueActive} onInspect={(positionId, runId) => {
+      <PositionQueue positions={positions} harnesses={availableHarnesses} modelSelection={modelSelection} modelReady={modelReady} codexWorker={codexWorker} singleRunning={running} onActiveChange={setQueueActive} onDiscard={(runId) => {
+        setInspectedRunId((current) => current === runId ? undefined : current);
+        setHistoryRevision((value) => value + 1);
+      }} onInspect={(positionId, runId) => {
         choosePosition(positionId);
         setInspectedRunId(runId ?? undefined);
         setHistoryRevision((value) => value + 1);
@@ -409,14 +458,14 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                       <span>
                         <strong>
                           {running
-                            ? isCodex ? codexJob?.stopping ? "Stopping Codex" : `Codex · pass ${codexJob?.pass_number ?? 1}` : "Running one turn"
+                            ? cancelling ? "Cancelling run" : cancelError ? "Cancellation needs attention" : isCodex ? codexJob?.stopping ? "Stopping Codex" : `Codex · pass ${codexJob?.pass_number ?? 1}` : "Running one turn"
                             : runResult
                               ? `Move ${runResult.move.san} proposed`
                               : selectedHarness
                                 ? `${selectedHarness.name} selected`
                                 : "Select a harness to begin"}
                         </strong>
-                        <small>{running ? isCodex ? codexJob?.progress ?? "Starting Codex…" : "Waiting for the model. This can take a few minutes." : queueActive ? "A full queue is active. Single runs are available when it finishes." : isCodex && !codexWorker?.online ? "Connect the Windows worker to run this position." : "Your saved position stays unchanged."}</small>
+                        <small>{running ? cancelling ? "Stopping execution and removing saved passes…" : cancelError ? "Retry discard to finish removing this attempt." : isCodex ? codexJob?.progress ?? "Starting Codex…" : "Waiting for the model. This can take a few minutes." : queueActive ? "A full queue is active. Single runs are available when it finishes." : isCodex && !codexWorker?.online ? "Connect the Windows worker to run this position." : "Your saved position stays unchanged."}</small>
                       </span>
                     </div>
                     <button
@@ -427,12 +476,14 @@ export function PositionalTesting({ modelSelection, modelReady, running, onRunni
                       onClick={() => void runOnce()}
                     >
                       {running ? (
-                        <><LoaderCircle className="spin" size={16} aria-hidden="true" /> Running one turn…</>
+                        <><LoaderCircle className="spin" size={16} aria-hidden="true" /> {cancelling || cancelError ? "Cancellation pending" : "Running one turn…"}</>
                       ) : (
                         <><Play size={15} fill="currentColor" aria-hidden="true" /> {runError ? "Try again" : runResult ? "Run again" : "Run once"}</>
                       )}
                     </button>
-                    {isCodex && running && codexRunId ? <button className="codex-stop" type="button" disabled={codexJob?.stopping} onClick={() => void stopCodex()}><Square size={14} aria-hidden="true" />{codexJob?.stopping ? "Stopping…" : "Stop Codex"}</button> : null}
+                    {running && (codexRunId || singleRunId) ? <><button className="codex-stop" type="button" disabled={cancelling} onClick={() => void cancelRun()}><Square size={14} aria-hidden="true" />{cancelling ? "Cancelling…" : cancelError ? "Retry discard" : "Cancel run"}</button><p className="position-queue__hint">Discards this attempt and its saved passes.</p></> : null}
+                    {cancelError ? <p className="run-failure" role="alert">Could not discard the run. {cancelError}</p> : null}
+                    {runNotice ? <p className="position-queue__hint" role="status">{runNotice}</p> : null}
                   </div>
 
                   {codexConnectionError && isCodex ? <p className="run-failure" role="alert">{codexConnectionError}</p> : null}

@@ -43,7 +43,6 @@ PROVIDER_PARAMETER_NAMES = {
     "see_eval": frozenset({"source", "actor", "score_perspective"}),
     "running_thoughts": frozenset(),
     "tested_lines": frozenset(),
-    "forced_tool_retry": frozenset(),
 }
 
 
@@ -138,13 +137,6 @@ class TestedLineEntry:
 class TestedLinesContext:
     agent_side: str
     entries: tuple[TestedLineEntry, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class ForcedToolRetryContext:
-    previous_output: str
-    correction: str
-    fence: str
 
 
 def _castling_rights(board: chess.Board) -> str:
@@ -527,30 +519,11 @@ def build_tested_lines_context(state: TurnState) -> TestedLinesContext:
     return TestedLinesContext(agent_side=agent_side, entries=tuple(entries))
 
 
-def build_forced_tool_retry_context(state: TurnState) -> ForcedToolRetryContext:
-    """Build context for a retry section selected by the manifest."""
-
-    if not state["forced_retry"]:
-        raise ValueError("Forced retry context requires an active forced retry.")
-    previous = state["retry_output"].strip()
-    if not previous:
-        previous = "(No visible previous output was captured.)"
-    fence = "````"
-    while fence in previous:
-        fence += "`"
-    return ForcedToolRetryContext(
-        previous_output=previous,
-        correction=state["correction"].strip(),
-        fence=fence,
-    )
-
-
 def build_condition_context(state: TurnState) -> dict[str, dict[str, object]]:
     """Expose the small normalized state surface allowed in manifest conditions."""
 
     return {
         "scratch": {"status": "active" if state["scratch_moves"] else "unused"},
-        "retry": {"active": state["forced_retry"]},
     }
 
 
@@ -625,14 +598,6 @@ def _running_thoughts_provider(
     return asdict(build_running_thoughts_context(state))
 
 
-def _forced_tool_retry_provider(
-    state: TurnState,
-    parameters: Mapping[str, Any],
-) -> dict[str, Any]:
-    _require_parameters("forced_tool_retry", parameters, set())
-    return asdict(build_forced_tool_retry_context(state))
-
-
 PROVIDERS: dict[
     str,
     Callable[[TurnState, Mapping[str, Any]], dict[str, Any]],
@@ -641,7 +606,6 @@ PROVIDERS: dict[
     "see_eval": _see_eval_provider,
     "running_thoughts": _running_thoughts_provider,
     "tested_lines": _tested_lines_provider,
-    "forced_tool_retry": _forced_tool_retry_provider,
 }
 
 

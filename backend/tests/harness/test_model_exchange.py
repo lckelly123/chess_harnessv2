@@ -6,9 +6,10 @@ from uuid import uuid4
 
 import httpx2
 import pytest
-from conftest import JUSTIFICATION, call
+from conftest import JUSTIFICATION, call, thoughtful_batch, thoughtful_call
 from openai import AsyncOpenAI
 
+from harness.agent_player_2 import AgentConfig, AgentPlayer2
 from harness.baseline import BaselineAgent, BaselineConfig
 from harness.contracts import HarnessError
 from harness.model import LMStudioModel, NativeToolTurn, OpenAIModel, UnslothModel
@@ -195,6 +196,113 @@ def test_rejected_output_and_forced_retry_have_distinct_snapshots(
         assert present_exchange(saved).output == [text[number - 1]]
     assert run_store.passes[(recorder.run_id, 1)]["status"] == "failed"
     assert run_store.passes[(recorder.run_id, 2)]["status"] == "completed"
+
+
+def test_chess_harness_retries_preserve_exact_wire_input_and_failed_output(
+    request_position, run_store
+):
+    recorder = PassRecorder(run_store, str(uuid4()))
+    responses = [
+        thoughtful_call("scratch_play_move", move="e4"),
+        thoughtful_batch(
+            {
+                "tool": "annotate_branch",
+                "arguments": {
+                    "branch_id": "B1",
+                    "annotation": "Rejected annotation must not be committed.",
+                },
+            },
+            {"tool": "scratch_play_move", "arguments": {"move": "e4"}},
+            running_thoughts="Rejected notes must not be committed.",
+        ),
+        thoughtful_call("scratch_play_move", move="e5"),
+        thoughtful_call(
+            "submit_move", move="e4", tested_branch="B1", decision_summary=JUSTIFICATION
+        ),
+    ]
+    raw = [envelope([message(r["output_text"])]) for r in responses]
+    raw[1]["output"].insert(
+        0,
+        dict(
+            type="reasoning",
+            id="rs_failed",
+            summary=[
+                dict(
+                    type="summary_text",
+                    text="Rejected reasoning stays in the log only.",
+                )
+            ],
+        ),
+    )
+    requests = []
+
+    def transport(request):
+        requests.append(json.loads(request.content))
+        return httpx2.Response(200, json=raw[len(requests) - 1])
+
+    async def run():
+        model = provider(transport, UnslothModel)
+        token = current_recorder.set(recorder)
+        try:
+            return await AgentPlayer2(model, AgentConfig(model="offline")).choose_move(
+                request_position
+            )
+        finally:
+            current_recorder.reset(token)
+            await model.aclose()
+
+    assert asyncio.run(run()).move.san == "e4"
+    assert requests[1] == requests[2]
+    assert requests[1]["max_output_tokens"] == 2000
+    assert requests[1]["reasoning"] == {"effort": "medium"}
+    assert "Rejected" not in requests[2]["input"][-1]["content"]
+    for number in range(1, 5):
+        saved = run_store.get_pass_exchange(recorder.run_id, number)
+        assert saved["model_input"] == requests[number - 1]
+        assert saved["model_output"] == raw[number - 1]
+    failed = run_store.passes[(recorder.run_id, 2)]
+    assert failed["status"] == "failed"
+    assert failed["error"]
+    assert failed["working_notes"] == "Rejected notes must not be committed."
+    assert all(not c["executed"] and c["result"] is None for c in failed["tool_calls"])
+    assert failed["tool_calls"][1]["error"]
+    assert run_store.passes[(recorder.run_id, 3)]["status"] == "completed"
+
+
+def test_chess_harness_records_all_eleven_failed_attempts(request_position, run_store):
+    recorder = PassRecorder(run_store, str(uuid4()))
+    response = envelope(
+        [message(thoughtful_call("scratch_play_move", move="e5")["output_text"])]
+    )
+    requests = []
+
+    def transport(request):
+        requests.append(json.loads(request.content))
+        return httpx2.Response(200, json=response)
+
+    async def run():
+        model = provider(transport, UnslothModel)
+        token = current_recorder.set(recorder)
+        try:
+            with pytest.raises(HarnessError, match="exhausted 10 same-input retries"):
+                await AgentPlayer2(model, AgentConfig(model="offline")).choose_move(
+                    request_position
+                )
+        finally:
+            current_recorder.reset(token)
+            await model.aclose()
+
+    asyncio.run(run())
+    assert len(requests) == 11
+    assert all(r == requests[0] for r in requests)
+    for number in range(1, 12):
+        row = run_store.passes[(recorder.run_id, number)]
+        assert row["status"] == "failed" and row["error"] and row["finished_at"]
+        assert all(not c["executed"] for c in row["tool_calls"])
+        assert (
+            run_store.get_pass_exchange(recorder.run_id, number)["model_output"]
+            == response
+        )
 
 
 def test_connection_failure_retains_input_without_inventing_output(run_store):

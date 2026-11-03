@@ -1,5 +1,6 @@
 """One pass per node invocation; every repeat is a graph edge."""
 
+import logging
 from collections.abc import Callable
 
 from harness.contracts import HarnessError, TurnCancelled
@@ -18,7 +19,10 @@ from .tools import (
     execute_tool,
     validate_arguments,
     validate_tool_batch,
+    validate_tool_state,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SynthesisNodes:
@@ -35,32 +39,38 @@ class SynthesisNodes:
         if self.cancellation_check and self.cancellation_check():
             raise TurnCancelled("Turn cancelled; no move submitted.")
 
-    def _retry(self, state, message, output, *, protocol_error, trigger):
-        errors = state["protocol_errors"] + int(protocol_error)
-        if errors > self.config.max_protocol_retries:
+    def _retry(self, state, message, *, protocol_error, failed_tool_index=None):
+        logger.warning(
+            "Rejected chess_harness response: game=%s ply=%s pass=%s "
+            "retries_used=%s/%s reason=%s",
+            state["game_id"],
+            state["ply"],
+            state["model_calls"],
+            state["forced_retries"],
+            self.config.max_response_retries,
+            message,
+        )
+        if state["forced_retries"] >= self.config.max_response_retries:
             raise HarnessError(
-                f"{state['phase']} exceeded its protocol retry limit: {message}"
-            )
-        if state["forced_retries"] >= self.config.max_forced_retries:
-            raise HarnessError(
-                f"{state['phase']} exhausted forced-tool retries: {message}"
+                f"{state['phase']} exhausted {self.config.max_response_retries} "
+                f"same-input retries: {message}"
             )
         return {
             **state,
-            "protocol_errors": errors,
-            "correction": message,
+            "protocol_errors": state["protocol_errors"] + int(protocol_error),
+            "rejected_calls": state["rejected_calls"] + int(not protocol_error),
             "pending_tools": [],
+            "pending_running_thoughts": "",
             "next_step": state["phase"],
             "forced_retry": True,
-            # Keep the original reasoning when a subsequent forced pass is empty.
-            "retry_output": output or state["retry_output"],
-            "retry_trigger": trigger,
             "events": [
                 *state["events"],
                 {
-                    "type": "forced_tool_retry",
+                    "type": "response_retry",
                     "phase": state["phase"],
                     "reason": message,
+                    "failed_tool_index": failed_tool_index,
+                    "retry_number": state["forced_retries"] + 1,
                 },
             ],
         }
@@ -73,25 +83,27 @@ class SynthesisNodes:
         if state["model_calls"] >= self.config.max_model_calls:
             raise HarnessError(f"{phase} exceeded its model-call limit.")
         forced = state["forced_retry"]
-        prompt = build_prompt(state)
+        pass_input = state["pass_input"]
+        if pass_input is None:
+            prompt = build_prompt(state)
+            pass_input = {
+                "instructions": prompt.instructions,
+                "dynamic_input": prompt.dynamic_input,
+            }
         response = await complete_pass(
             self.model,
             state,
             model=self.config.model,
-            instructions=prompt.instructions,
-            dynamic_input=prompt.dynamic_input,
-            reasoning_effort=self.config.retry_reasoning_effort
-            if forced
-            else self.config.reasoning_effort,
-            max_output_tokens=self.config.retry_max_output_tokens
-            if forced
-            else self.config.max_output_tokens,
+            **pass_input,
+            reasoning_effort=self.config.reasoning_effort,
+            max_output_tokens=self.config.max_output_tokens,
             forced_retry=forced,
         )
         self._check_cancelled()
         text, reasoning = visible_output(response)
         current = {
             **state,
+            "pass_input": pass_input,
             "model_calls": state["model_calls"] + 1,
             "forced_retries": state["forced_retries"] + int(forced),
             "events": [
@@ -106,8 +118,14 @@ class SynthesisNodes:
             ],
         }
         if response.get("status") in {"failed", "cancelled"}:
-            raise HarnessError(f"LM Studio response status: {response['status']}.")
-        exposed = "\n\n".join(value for value in (reasoning, text) if value)
+            raise HarnessError(f"Model response status: {response['status']}.")
+        if response.get("status") == "incomplete":
+            reason = (response.get("incomplete_details") or {}).get("reason", "unknown")
+            return self._retry(
+                current,
+                f"Incomplete model response: {reason}.",
+                protocol_error=True,
+            )
         try:
             parsed = parse_agent_response(text)
             calls = []
@@ -119,32 +137,16 @@ class SynthesisNodes:
                 calls.append(call)
             validate_tool_batch(calls)
         except ToolProtocolError as exc:
-            reasoning_only = bool(exposed) and "<agent_tool_calls>" not in text
-            details = response.get("incomplete_details") or {}
-            usage = response.get("usage") or {}
-            reasoning_tokens = (usage.get("output_tokens_details") or {}).get(
-                "reasoning_tokens", 0
-            ) or 0
-            exhausted = (
-                details.get("reason") == "max_output_tokens"
-                or reasoning_tokens >= self.config.max_output_tokens
-            )
-            trigger = (
-                "reasoning_budget_exhausted" if exhausted else "reasoning_only_response"
-            )
             return self._retry(
                 current,
                 str(exc),
-                exposed,
-                protocol_error=not reasoning_only,
-                trigger=trigger,
+                protocol_error=True,
             )
         if state["tool_calls"] + len(calls) > self.config.max_tool_calls:
             raise HarnessError(f"{phase} exceeded its tool-call limit.")
         current.update(
-            running_thoughts=parsed.running_thoughts,
+            pending_running_thoughts=parsed.running_thoughts,
             pending_tools=calls,
-            tool_calls=state["tool_calls"] + len(calls),
         )
         if any(call["tool"] == TERMINAL_TOOLS[phase] for call in calls):
             # Terminal tool validation is part of the submission edge; it has
@@ -159,6 +161,27 @@ class SynthesisNodes:
         if not calls:
             raise HarnessError("Tool node has no pending tool calls.")
 
+        # Validate the entire batch before calling or recording any tool. Failed
+        # proposals keep their notes and calls only in the saved model response.
+        for batch_index, call in enumerate(calls):
+            try:
+                validate_tool_state(
+                    phase=state["phase"],
+                    name=call["tool"],
+                    arguments=call["arguments"],
+                    canonical_fen=state["canonical_fen"],
+                    scratch_moves=state["scratch_moves"],
+                    tested_lines=state["tested_lines"],
+                    active_branch_id=state["active_branch_id"],
+                )
+            except (ToolProtocolError, ToolRejected) as exc:
+                return self._retry(
+                    state,
+                    str(exc),
+                    protocol_error=isinstance(exc, ToolProtocolError),
+                    failed_tool_index=batch_index,
+                )
+
         indexed_calls = list(enumerate(calls))
         ordered_calls = sorted(
             indexed_calls,
@@ -169,91 +192,46 @@ class SynthesisNodes:
         active_branch_id = state["active_branch_id"]
         attempted_events = []
         decision = None
-        try:
-            for batch_index, call in ordered_calls:
-                event = {
-                    "type": "tool_call",
-                    "phase": state["phase"],
-                    "batch_index": batch_index,
-                    "tool": call["tool"],
-                    "running_thoughts": state["running_thoughts"],
-                    "arguments": dict(call["arguments"]),
-                }
-                result = recorded_tool(
-                    execute_tool,
-                    phase=state["phase"],
-                    name=call["tool"],
-                    arguments=call["arguments"],
-                    canonical_fen=state["canonical_fen"],
-                    side=state["side"],
-                    scratch_moves=scratch_moves,
-                    tested_lines=tested_lines,
-                    active_branch_id=active_branch_id,
-                    langsmith_extra={"name": call["tool"]},
-                )
-                scratch_moves = result["scratch_moves"]
-                tested_lines = result["tested_lines"]
-                active_branch_id = result["active_branch_id"]
-                decision = result.get("decision", decision)
-                event.update(
-                    ok=True,
-                    result=result.get("result", {"decision": result.get("decision")}),
-                    result_summary=result.get("result_summary", "Submission accepted."),
-                )
-                attempted_events.append(event)
-                self._check_cancelled()
-        except ToolRejected as exc:
-            rejected = state["rejected_calls"] + 1
-            if rejected >= self.config.max_failed_tool_calls:
-                raise HarnessError(
-                    f"{state['phase']} reached its rejected-tool limit: {exc}"
-                ) from exc
-            rollback_summary = f"Rolled back because the tool batch was rejected: {exc}"
-            rolled_back = [
-                {
-                    **event,
-                    "ok": False,
-                    "rolled_back": True,
-                    "result_summary": rollback_summary,
-                }
-                for event in attempted_events
-            ]
-            failed_event = {
+        for batch_index, call in ordered_calls:
+            event = {
                 "type": "tool_call",
                 "phase": state["phase"],
                 "batch_index": batch_index,
                 "tool": call["tool"],
-                "running_thoughts": state["running_thoughts"],
+                "running_thoughts": state["pending_running_thoughts"],
                 "arguments": dict(call["arguments"]),
-                "ok": False,
-                "result_summary": str(exc),
             }
-            batch_events = [*rolled_back, failed_event]
-            batch_events.sort(key=lambda event: event["batch_index"])
-            return {
-                **state,
-                "rejected_calls": rejected,
-                "pending_tools": [],
-                "next_step": state["phase"],
-                "latest_tool_results": [
-                    {
-                        "tool": event["tool"],
-                        "ok": False,
-                        "result_summary": event["result_summary"],
-                    }
-                    for event in batch_events
-                ],
-                "history": [*state["history"], *batch_events][
-                    -self.config.history_event_limit :
-                ],
-                "events": [*state["events"], *batch_events],
-                "correction": "",
-            }
-
+            result = recorded_tool(
+                execute_tool,
+                phase=state["phase"],
+                name=call["tool"],
+                arguments=call["arguments"],
+                canonical_fen=state["canonical_fen"],
+                side=state["side"],
+                scratch_moves=scratch_moves,
+                tested_lines=tested_lines,
+                active_branch_id=active_branch_id,
+                langsmith_extra={"name": call["tool"]},
+            )
+            scratch_moves = result["scratch_moves"]
+            tested_lines = result["tested_lines"]
+            active_branch_id = result["active_branch_id"]
+            decision = result.get("decision", decision)
+            event.update(
+                ok=True,
+                result=result.get("result", {"decision": result.get("decision")}),
+                result_summary=result.get("result_summary", "Submission accepted."),
+            )
+            attempted_events.append(event)
+            self._check_cancelled()
         attempted_events.sort(key=lambda event: event["batch_index"])
         current = {
             **state,
             "pending_tools": [],
+            "running_thoughts": state["pending_running_thoughts"],
+            "pending_running_thoughts": "",
+            "pass_input": None,
+            "tool_calls": state["tool_calls"] + len(calls),
             "scratch_moves": scratch_moves,
             "tested_lines": tested_lines,
             "active_branch_id": active_branch_id,
@@ -267,8 +245,6 @@ class SynthesisNodes:
             ],
             "forced_retry": False,
             "forced_retries": 0,
-            "retry_output": "",
-            "correction": "",
             "history": [*state["history"], *attempted_events][
                 -self.config.history_event_limit :
             ],

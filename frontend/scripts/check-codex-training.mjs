@@ -24,7 +24,7 @@ const position = {
   sideToMove: "white", moveCount: 38,
   position: { ply: 38, fen: "r1b1r1k1/pp3ppp/5q2/3p4/1P1P1B2/P2Q3P/5PP1/2R2RK1 w - - 1 20", san: "Qf6", player: "black", fromSquare: "d8", toSquare: "f6" },
 };
-const runId = "22222222-2222-4222-8222-222222222222";
+let runId = "22222222-2222-4222-8222-222222222222";
 const now = "2026-10-14T20:00:00Z";
 const explanation = "The current input gives the legal moves. I will inspect the queen before updating its safety assessment.";
 const response = '<running_thoughts>\nVulnerabilities: Queen safety is unverified.\n\nOpportunities: Not assessed.\n\nSynthesis: Pending inspections.\n</running_thoughts>\n\n<agent_tool_calls>\n[{"tool":"inspect_square","arguments":{"board":"canonical","square":"d3"}}]\n</agent_tool_calls>';
@@ -37,6 +37,7 @@ try {
     let job = null;
     let starts = 0;
     let stops = 0;
+    let discarded = false;
     const record = () => ({
       id: runId, positionId: position.id, queueTag: null, model: "gpt-6-astra", harness: harnesses[2].id,
       config: { harness_name: "chess_harness", provider: "codex_mcp", teacher_reasoning_effort: "max" },
@@ -55,14 +56,17 @@ try {
       if (path === "/api/codex-training/worker") return send({ configured: online, online, model: online ? "gpt-6-astra" : null, reasoning_effort: "max", active_run_id: job && !["completed", "cancelled"].includes(job.status) ? runId : null });
       if (path === "/api/codex-training/jobs" && request.method() === "POST") {
         starts++;
+        if (starts > 1) runId = crypto.randomUUID();
+        discarded = false;
         assert.deepEqual(request.postDataJSON(), { position_id: position.id });
         job = { run_id: runId, position_id: position.id, status: "waiting", pass_number: 2, progress: "Writing pass 2", stopping: false, error: null, result: null };
         return send(job, 202);
       }
-      if (path === `/api/codex-training/jobs/${runId}/stop` && request.method() === "POST") {
+      if (path === `/api/positional-testing/runs/${runId}/cancel` && request.method() === "POST") {
         stops++;
-        job = { ...job, status: "cancelled", stopping: true, error: "Codex training run stopped." };
-        return send(job, 202);
+        discarded = true;
+        job = { ...job, status: "cancelled", stopping: true, error: null };
+        return route.fulfill({ status: 204 });
       }
       assert.equal(request.method(), "GET", `Unexpected mutation: ${path}`);
       if (path === `/api/codex-training/jobs/${runId}`) return send(job);
@@ -73,7 +77,7 @@ try {
       if (path === "/api/positional-testing/positions") return send({ items: [position] });
       if (path === "/api/positional-testing/queues") return send({ items: [] });
       if (path === "/api/positional-testing/run-filters") return send({ datasets: ["v1"], models: ["gpt-6-astra"], harnesses, queues: [] });
-      if (path === "/api/positional-testing/runs") return send({ items: job ? [record()] : [], total: job ? 1 : 0 });
+      if (path === "/api/positional-testing/runs") return send({ items: job && !discarded ? [record()] : [], total: job && !discarded ? 1 : 0 });
       if (path.endsWith("/passes/1/exchange")) return send({ input: JSON.stringify({ input: [{ role: "user", content: "# Canonical position\n\nWhite to move." }] }), output: [explanation, response] });
       if (path === `/api/positional-testing/runs/${runId}`) return send(record());
       throw new Error(`Unexpected API request ${path}`);
@@ -101,10 +105,10 @@ try {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: resolve(directory, `codex-${viewport.name}.png`), fullPage: true, animations: "disabled" });
     await stage.locator(".position-inspector").screenshot({ path: resolve(directory, `codex-${viewport.name}-controls.png`), animations: "disabled" });
-    await stage.getByRole("button", { name: "Stop Codex", exact: true }).click();
-    await stage.getByText("Codex run stopped.", { exact: true }).waitFor();
+    await stage.getByRole("button", { name: "Cancel run", exact: true }).click();
+    await stage.getByText("Run discarded. Its passes and results have been removed.", { exact: true }).waitFor();
     assert.equal(stops, 1);
-    await stage.getByRole("button", { name: "Try again", exact: true }).click();
+    await stage.getByRole("button", { name: "Run once", exact: true }).click();
     await stage.getByText("Codex · pass 2", { exact: true }).waitFor();
     job = { ...job, status: "completed", result: { runId, positionId: position.id, positionName: position.name, harnessId: harnesses[2].id, harnessName: "chess_harness", harnessVersion: "v1", model: "gpt-6-astra", side: "white", ply: 38, move: { san: "Be5", uci: "f4e5", fromSquare: "f4", toSquare: "e5" }, justification: "Browser fixture only.", defenseReport: null, attackReport: null } };
     await stage.getByText("Move Be5 proposed", { exact: true }).waitFor();
@@ -117,5 +121,5 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
-  console.log("Codex UI: offline recovery, independent model readiness, start, reload, stop, completion, and expanded explanation passed at desktop/mobile sizes.");
+  console.log("Codex UI: offline recovery, independent model readiness, start, reload, cancel/discard, completion, and expanded explanation passed at desktop/mobile sizes.");
 } finally { await browser.close(); }

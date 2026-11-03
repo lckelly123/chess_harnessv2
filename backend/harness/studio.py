@@ -57,7 +57,6 @@ def _agent_player_2_config(model_name: str) -> AgentPlayer2Config:
     return AgentPlayer2Config(
         model=model_name,
         reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
-        retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
     )
 
 

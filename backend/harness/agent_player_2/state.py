@@ -36,12 +36,11 @@ class TurnState(TypedDict):
     running_thoughts: str
     latest_tool_results: list[dict[str, Any]]
     history: list[dict[str, Any]]
-    correction: str
     pending_tools: list[dict[str, Any]]
+    pending_running_thoughts: str
+    pass_input: dict[str, str] | None
     next_step: str
     forced_retry: bool
-    retry_output: str
-    retry_trigger: str
     forced_retries: int
     model_calls: int
     tool_calls: int
@@ -60,12 +59,11 @@ def phase_state(phase: Phase) -> dict[str, Any]:
         running_thoughts="",
         latest_tool_results=[],
         history=[],
-        correction="",
         pending_tools=[],
+        pending_running_thoughts="",
+        pass_input=None,
         next_step=phase,
         forced_retry=False,
-        retry_output="",
-        retry_trigger="reasoning_only_response",
         forced_retries=0,
         model_calls=0,
         tool_calls=0,

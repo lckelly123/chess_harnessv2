@@ -43,6 +43,13 @@ class MemoryRunRepository:
         self.passes = {}
         self.exchanges = {}
 
+    def discard_run(self, run_id):
+        self.runs.pop(run_id, None)
+        for collection in (self.passes, self.exchanges):
+            for key in list(collection):
+                if key[0] == run_id:
+                    del collection[key]
+
     def create(self, run_id, position_id, model, harness, config):
         self.runs[run_id] = dict(
             id=run_id,

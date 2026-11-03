@@ -1,6 +1,6 @@
 import { ChevronRight, ListOrdered, LoaderCircle, RefreshCw, RotateCcw, Square } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
-import { matchApi } from "../api/client";
+import { ApiError, matchApi } from "../api/client";
 import { CODEX_TRAINING_ID, type CodexWorkerStatus } from "../api/codex";
 import type { HarnessVersion, ModelSelection, PositionalTestPosition, PositionQueueDetail, PositionQueueItem, PositionQueueSummary } from "../api/contracts";
 import { tagLabel } from "./positionFilters";
@@ -19,9 +19,10 @@ interface PositionQueueProps {
   singleRunning: boolean;
   onActiveChange: (active: boolean) => void;
   onInspect: (positionId: string, runId: string | null) => void;
+  onDiscard: (runId: string) => void;
 }
 
-export function PositionQueue({ positions, harnesses, modelSelection, modelReady, codexWorker, singleRunning, onActiveChange, onInspect }: PositionQueueProps) {
+export function PositionQueue({ positions, harnesses, modelSelection, modelReady, codexWorker, singleRunning, onActiveChange, onInspect, onDiscard }: PositionQueueProps) {
   const id = useId();
   const [name, setQueueName] = useState("");
   const [split, setSplit] = useState<"train" | "test">("train");
@@ -31,6 +32,9 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
   const [selectedId, setSelectedId] = useState("");
   const [retrySourceId, setRetrySourceId] = useState("");
   const [retrying, setRetrying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [cancelFailure, setCancelFailure] = useState<{ runId: string; message: string } | null>(null);
   const [queue, setQueue] = useState<PositionQueueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -84,6 +88,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
   const start = async () => {
     if (!count || !validHarness || hasActive || singleRunning || pending || error || !ready) return;
     setPending(true);
+    setNotice(null);
     setCommandError(null);
     try {
       const result = await matchApi.createPositionQueue({ name: name.trim() || undefined, split, datasetVersion, harnessId, ...(isCodex ? {} : { modelSelection }) });
@@ -120,6 +125,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
   const retryUnfinished = async () => {
     if (!retrySource || retryBlock || loading || pending || error) return;
     setPending(true);
+    setNotice(null);
     setRetrying(true);
     setCommandError(null);
     try {
@@ -134,6 +140,31 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
       setCommandError(message(caught));
     } finally {
       setRetrying(false);
+      setPending(false);
+      setRevision((value) => value + 1);
+    }
+  };
+
+  const cancelCurrent = async (runId = current?.runId) => {
+    if (!runId || pending) return;
+    setPending(true);
+    setCancelling(true);
+    setCommandError(null);
+    setNotice(null);
+    try {
+      await matchApi.cancelModelRun(runId);
+      setCancelFailure(null);
+      setNotice("Run discarded. Its passes and results have been removed.");
+      onDiscard(runId);
+    } catch (caught) {
+      if (caught instanceof ApiError && [404, 409].includes(caught.status)) {
+        setCancelFailure(null);
+        setCommandError(message(caught));
+      } else {
+        setCancelFailure({ runId, message: message(caught) });
+      }
+    } finally {
+      setCancelling(false);
       setPending(false);
       setRevision((value) => value + 1);
     }
@@ -169,7 +200,7 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
         <p id={`${id}-retry-source-hint`} className="position-queue__hint" aria-live="polite">{retrySource ? <><strong>{retrySource.name || `${setName(retrySource.split)} set`}</strong> · {retrySource.harnessName} · {modelName(retrySource.modelSelection)}<br />Failed and skipped positions restart in this same queue using its saved settings. Completed results stay as they are. Earlier attempts remain in run history.</> : retrySources.length ? "Choose the queue whose failed and skipped positions you want to run again. This choice is separate from the results shown below." : "Finished or stopped queues with failed or skipped positions will appear here."}</p>
         <p id={`${id}-retry-hint`} className="position-queue__hint" role="status">{retryBlock}</p>
       </section> : null}
-      {queues.length > 0 ? <label className="field-control position-queue__history" htmlFor={`${id}-history`}><span>Recent queues</span><select id={`${id}-history`} value={selectedId || queues[0].id} onChange={(event) => { setSelectedId(event.target.value); setFailedOnly(false); }}>{queues.map((q) => <option key={q.id} value={q.id}>{q.name ? `${q.name} · ` : ""}{setName(q.split)} · {q.harnessName} · {new Date(q.createdAt).toLocaleString()} · {q.status} · {q.id.slice(0, 8)}</option>)}</select></label> : null}
+      {queues.length > 0 ? <label className="field-control position-queue__history" htmlFor={`${id}-history`}><span>Recent queues</span><select id={`${id}-history`} value={selectedId || queues[0].id} disabled={cancelling || !!cancelFailure} onChange={(event) => { setSelectedId(event.target.value); setFailedOnly(false); setNotice(null); }}>{queues.map((q) => <option key={q.id} value={q.id}>{q.name ? `${q.name} · ` : ""}{setName(q.split)} · {q.harnessName} · {new Date(q.createdAt).toLocaleString()} · {q.status} · {q.id.slice(0, 8)}</option>)}</select></label> : null}
       {selected ? <div className="position-queue__progress">
         <p className="position-queue__id">{selected.retryOf ? "Retry queue run" : "Full queue run"} <code>{selected.id}</code></p>
         {selected.retryOf ? <p className="position-queue__id">Retry of {selected.retryOfName ? `${selected.retryOfName} · ` : ""}<code>{selected.retryOf}</code></p> : null}
@@ -177,7 +208,9 @@ export function PositionQueue({ positions, harnesses, modelSelection, modelReady
         <div className="position-queue__counts" aria-live="polite"><strong>{selected.completed + selected.failed} / {selected.total} attempted</strong><span>{selected.completed} completed</span><button type="button" className={selected.failed ? "run-failure" : ""} disabled={!selected.failed} onClick={() => { setFailedOnly(true); setExpanded(true); }}>{selected.failed} failed</button><span>{selected.pending} waiting{selected.skipped ? ` · ${selected.skipped} skipped` : ""}</span></div>
         <progress aria-label="Queue progress" max={selected.total} value={selected.completed + selected.failed + selected.skipped} />
         {selected.modelSelection.modelId === "codex" && active(selected) && !current && !codexWorker?.online ? <p className="position-queue__hint" role="status">Waiting for the Windows Codex worker. Pending positions will resume when it reconnects.</p> : null}
-        {current ? <div className="position-queue__current"><LoaderCircle className="spin" size={15} aria-hidden="true" /><span>Position {current.ordinal}: {positionsById.get(current.positionId)?.name ?? current.positionId}</span><button type="button" disabled={singleRunning} onClick={() => inspect(current)}>{current.runId ? "View live trace" : "View position"}</button></div> : null}
+        {current ? <><div className="position-queue__current"><LoaderCircle className="spin" size={15} aria-hidden="true" /><span>Position {current.ordinal}: {positionsById.get(current.positionId)?.name ?? current.positionId}</span><button type="button" disabled={singleRunning} onClick={() => inspect(current)}>{current.runId ? "View live trace" : "View position"}</button><button className="run-cancel" type="button" disabled={pending || !!cancelFailure || !current.runId} aria-describedby={`${id}-cancel-hint`} onClick={() => void cancelCurrent()}>{cancelling ? "Cancelling…" : "Cancel current run"}</button></div><p id={`${id}-cancel-hint`} className="position-queue__hint">Discards this attempt and its saved passes.{selected.status === "stopping" ? " The queue will then stop." : " The queue continues with the next position."}</p></> : null}
+        {cancelFailure ? <div className="position-queue__hint" role="alert"><p className="run-failure">Could not discard the run. {cancelFailure.message}</p><button className="codex-stop" type="button" disabled={pending} onClick={() => void cancelCurrent(cancelFailure.runId)}>{cancelling ? "Cancelling…" : "Retry discard"}</button></div> : null}
+        {notice ? <p className="position-queue__hint" role="status">{notice}</p> : null}
         {selected.status === "stopping" ? <p className="position-queue__hint">The current position will finish. Remaining positions will be marked skipped.</p> : null}
         <details className="position-queue__items" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
           <summary><ChevronRight size={15} aria-hidden="true" />Positions and results</summary>

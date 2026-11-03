@@ -58,6 +58,7 @@ def create_app(
         codex_training = CodexTrainingService(
             app.state.positional_test_runner.repository,
             app.state.positional_test_runner.evaluator,
+            active_runs=app.state.positional_test_runner.active_runs,
         )
         app.state.codex_training = codex_training
         codex_jobs = WorkerJobs(codex_training)

@@ -71,6 +71,42 @@ def headers(run):
     return {"Authorization": f"Bearer {run['run_token']}"}
 
 
+def test_cancel_endpoint_discards_live_codex_exchange(api, library_rows, run_store):
+    run = start(api, library_rows[0]["id"])
+    run_id = run["run_id"]
+    assert run_store.get(run_id)["passes"]
+    assert api.post(f"/api/positional-testing/runs/{run_id}/cancel").status_code == 204
+    assert api.get(f"/api/positional-testing/runs/{run_id}").status_code == 404
+    assert run_store.get(run_id) is None
+    assert not run_store.passes
+    assert not run_store.exchanges
+    session = api.app.state.codex_training.sessions[run_id]
+    assert session.status == "cancelled"
+    assert session.cancel_requested
+    assert session.result is None
+    assert not api.app.state.positional_test_runner.active_runs
+    # A late teacher submission cannot recreate a discarded pass.
+    response = api.post(
+        f"/api/codex-training/runs/{run_id}/response",
+        headers=headers(run),
+        json={
+            "pass_id": run["pass"]["pass_id"],
+            "response": "late",
+            "reasoning_text": "fixture",
+        },
+    )
+    assert response.status_code == 409
+    assert run_store.get(run_id) is None
+
+
+def test_cancel_endpoint_preserves_completed_history(api, library_rows, run_store):
+    run_id = str(uuid4())
+    run_store.create(run_id, library_rows[0]["id"], "old", "old", {})
+    run_store.finish(run_id, move="e4e5")
+    assert api.post(f"/api/positional-testing/runs/{run_id}/cancel").status_code == 409
+    assert run_store.get(run_id)["status"] == "completed"
+
+
 def submit(api, run, current, raw):
     result = api.post(
         f"/api/codex-training/runs/{run['run_id']}/response",
@@ -147,6 +183,13 @@ def test_real_harness_retry_tools_exact_capture_and_post_run_grading(
     assert current["pass"]["pass_number"] == 2
     assert current["last_accepted_pass_id"] == first["pass"]["pass_id"]
     assert current["pass"]["model_input"]["forced_retry"] is True
+    assert (
+        current["pass"]["model_input"]["input"] == first["pass"]["model_input"]["input"]
+    )
+    assert (
+        current["pass"]["model_input"]["requested_settings"]
+        == first["pass"]["model_input"]["requested_settings"]
+    )
     assert run_store.passes[(run["run_id"], 1)]["status"] == "failed"
     repeated = submit(api, run, first, malformed)
     assert repeated["duplicate"] is True

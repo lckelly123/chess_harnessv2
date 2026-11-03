@@ -42,9 +42,12 @@ def test_gpt_selection_bypasses_lmstudio_and_uses_medium(
     assert name == player.config.model == GPT_TERRA_MODEL
     assert player.config.provider == "openai"
     assert player.config.reasoning_effort == "medium"
-    assert player.config.retry_reasoning_effort == "none"
     assert player.config.max_output_tokens == 8000
-    assert player.config.retry_max_output_tokens == 2000
+    if harness_id == AGENT_PLAYER_2_ID:
+        assert player.config.max_response_retries == 10
+    else:
+        assert player.config.retry_reasoning_effort == "none"
+        assert player.config.retry_max_output_tokens == 2000
     config = player.run_config(request_position)
     assert "openai" in config["tags"]
     assert "lmstudio" not in config["tags"]
@@ -126,7 +129,7 @@ def test_match_resolves_one_configuration_for_both_players(model_id, monkeypatch
         assert name == "test-qwen"
         assert white.config.max_output_tokens == 4000
         assert black.config.max_output_tokens == 2000
-        assert black.config.retry_max_output_tokens == 600
+        assert black.config.max_response_retries == 10
     assert black.config.reasoning_effort == ("low" if model_id is None else "medium")
 
 
@@ -140,7 +143,7 @@ def test_gpt_output_limits_can_be_configured(monkeypatch):
         )
     )
     assert player.config.max_output_tokens == 2000
-    assert player.config.retry_max_output_tokens == 600
+    assert player.config.max_response_retries == 10
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "bad", "128001"])

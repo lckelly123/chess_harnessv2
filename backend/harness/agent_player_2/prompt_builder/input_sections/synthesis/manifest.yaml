@@ -35,10 +35,3 @@ messages:
       - id: tested_lines
         template: user/tested_lines.md
         provider: tested_lines
-
-      - id: forced_tool_retry
-        template: user/forced_tool_retry.md
-        provider: forced_tool_retry
-        when:
-          field: retry.active
-          equals: true

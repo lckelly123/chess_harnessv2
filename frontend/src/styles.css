@@ -654,6 +654,9 @@ details[open] > summary > svg:last-child { transform: rotate(180deg); }
 .position-queue progress::-webkit-progress-value { background: var(--accent); }
 .position-queue progress::-moz-progress-bar { background: var(--accent); }
 .position-queue__current { display: flex; gap: 10px; align-items: center; margin-top: 14px; font-size: 13px; color: var(--ink-soft); }
+.position-queue__current { flex-wrap: wrap; }
+.position-queue__current .run-cancel { color: var(--danger); background: var(--danger-wash); border: 1px solid var(--rule); border-radius: 6px; min-height: 38px; padding: 8px 12px; margin-left: 0; text-decoration: none; }
+.position-queue__current .run-cancel:hover:not(:disabled) { background: var(--surface-hover); }
 .position-queue__current svg { flex-shrink: 0; color: var(--accent); }
 .position-queue__current span { min-width: 0; overflow-wrap: anywhere; }
 .position-queue__current button, .position-queue__item > button { flex-shrink: 0; margin-left: auto; padding: 8px 0 8px 10px; border: 0; background: transparent; color: var(--accent); font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }

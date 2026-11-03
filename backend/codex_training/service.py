@@ -7,6 +7,7 @@ from uuid import uuid4
 from starlette.concurrency import run_in_threadpool
 
 from app.matches.catalog import AGENT_PLAYER_2_ID, HarnessCatalog
+from positional_testing.cancellation import RunDiscardedError
 from positional_testing.catalog import get_saved_position
 from positional_testing.runner import PositionalTestRunner, UnknownSavedPositionError
 
@@ -23,10 +24,11 @@ class RunCapacityError(ValueError):
 class CodexTrainingService:
     """Single-backend-process bridge. Finished traces live in the normal database."""
 
-    def __init__(self, repository, evaluator, *, max_active=4):
+    def __init__(self, repository, evaluator, *, max_active=4, active_runs=None):
         self.repository = repository
         self.evaluator = evaluator
         self.max_active = max_active
+        self.active_runs = active_runs if active_runs is not None else {}
         self.sessions: dict[str, RunSession] = {}
         self.tasks: dict[str, asyncio.Task] = {}
         self._lock = asyncio.Lock()
@@ -103,6 +105,7 @@ class CodexTrainingService:
             id_factory=lambda: session.run_id,
             repository=self.repository,
             evaluator=self.evaluator,
+            active_runs=self.active_runs,
         )
         try:
             result = await runner.run_once(
@@ -119,12 +122,17 @@ class CodexTrainingService:
                     **session.metadata,
                 },
                 cancellation_check=lambda: session.cancel_requested,
+                on_cancel=session.cancel,
             )
             stored = await run_in_threadpool(self.repository.get, session.run_id)
             session.result = result.model_dump(mode="json", by_alias=True)
             session.finish(
                 stored["status"], error=stored["error"], move=result.move.uci
             )
+        except RunDiscardedError:
+            session.result = None
+            session.metadata["discarded"] = True
+            session.finish("cancelled")
         except asyncio.CancelledError:
             session.finish("cancelled", error="Codex training run stopped.")
         except Exception as exc:

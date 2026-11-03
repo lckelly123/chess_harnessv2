@@ -77,13 +77,17 @@ positions wait for reconnection. A backend restart retains interrupted attempts
 as failures and continues unstarted positions; it does not replay a paid attempt.
 
 **Stop after current** finishes the active position and skips remaining positions.
+**Cancel current run** stops and discards only the active attempt, including its
+saved passes, exchanges, and any move or grade, then continues with the next
+position. If Stop after current was already requested, the queue stops after the
+discard. The source position and other attempts remain intact.
 The existing queue item timeout also applies to Codex positions (Docker default
-2,700 seconds / 45 minutes per position, configured by
+5,000 seconds / 83 minutes 20 seconds per position, configured by
 `POSITION_QUEUE_ITEM_TIMEOUT_SECONDS`); a timeout stops the teacher session and
 records the failed attempt before moving on. The backend reads this setting at
 startup. Changing it requires recreating the backend, which interrupts the active
 position and resumes pending positions with the new limit. A standalone backend
-without this environment setting retains its 1,800-second fallback.
+without this environment setting uses the same 5,000-second default.
 
 ## Teacher prompt and response format
 
@@ -158,12 +162,18 @@ backend through a read-only Docker mount. It is excluded from Git and never sent
 to the browser or included in prompts/datasets. Run/pass tokens stay in process
 memory and environment variables. The backend itself does not import the MCP SDK.
 
-## Stop and recovery
+## Cancel and recovery
 
-- **Stop Codex** stops the current investigation and terminates its child process.
-  Saved passes remain in normal run history. A validated move already being
-  graded may finish grading. Cancelled attempts use the database's existing
-  `failed` status, with a specific stop message.
+- **Cancel run** stops the single-position investigation and its child process,
+  interrupts grading if active, and removes the attempt and all saved passes,
+  exchanges, and results. It uses the shared positional-run cancel endpoint.
+  **Cancel current run** applies the same discard behavior to a queue position.
+- Cleanup failures show a separate error with **Retry discard**, retaining the
+  original run ID. Success is reported only after deletion completes. If the run
+  finished before cancellation was accepted, its completed result stays saved.
+- The manual authenticated `/runs/<run-id>/stop` API remains available for a stop
+  that retains saved passes; a validated move already being graded may finish.
+  That retained stop uses the database's existing `failed` status and stop message.
 - Reloading the UI reconnects to the active job. One worker and one UI-created
   Codex run are supported at a time. Clicking Run again creates a new run.
 - A disconnected worker causes the backend to close its active run after the
