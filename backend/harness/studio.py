@@ -48,7 +48,7 @@ def _model_name_for_introspection() -> str:
 def _agent_player_1_config(model_name: str) -> AgentPlayer1Config:
     return AgentPlayer1Config(
         model=model_name,
-        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT") or None,
         retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
     )
 
@@ -56,14 +56,14 @@ def _agent_player_1_config(model_name: str) -> AgentPlayer1Config:
 def _agent_player_2_config(model_name: str) -> AgentPlayer2Config:
     return AgentPlayer2Config(
         model=model_name,
-        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT") or None,
     )
 
 
 def _baseline_config(model_name: str) -> BaselineConfig:
     return BaselineConfig(
         model=model_name,
-        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+        reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT") or None,
         retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
     )
 

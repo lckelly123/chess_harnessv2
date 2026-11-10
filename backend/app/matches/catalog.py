@@ -66,7 +66,7 @@ class _ResolvedModel:
     client: Model
     name: str
     provider: str
-    reasoning_effort: str
+    reasoning_effort: str | None
     retry_reasoning_effort: str
     max_output_tokens: int | None = None
     retry_max_output_tokens: int | None = None
@@ -154,7 +154,7 @@ class HarnessCatalog:
                 client=self._openai_model,
                 name=GPT_TERRA_MODEL,
                 provider="openai",
-                reasoning_effort=selection.reasoning_effort,
+                reasoning_effort=None,
                 retry_reasoning_effort="none",
                 # Includes hidden reasoning and visible notes/tool-call text.
                 max_output_tokens=_output_limit("OPENAI_MAX_OUTPUT_TOKENS", 8000),
@@ -169,7 +169,7 @@ class HarnessCatalog:
                 client=self._unsloth_model,
                 name=selection.model_name or await self._unsloth_resolver(),
                 provider="unsloth",
-                reasoning_effort=selection.reasoning_effort,
+                reasoning_effort=None,
                 retry_reasoning_effort="none",
             )
         return _ResolvedModel(
@@ -177,9 +177,7 @@ class HarnessCatalog:
             name=(selection.model_name if selection else None)
             or await self._model_resolver(),
             provider=self._model_provider,
-            reasoning_effort=selection.reasoning_effort
-            if selection is not None
-            else os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+            reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT") or None,
             retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
         )
 

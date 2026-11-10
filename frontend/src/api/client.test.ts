@@ -33,7 +33,7 @@ describe("matchApi", () => {
   it("starts a full-set queue with its configuration and polls or stops by queue ID", async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 })));
     vi.stubGlobal("fetch", fetchMock);
-    const input = { name: "Test · prompt v2 雪", split: "test" as const, datasetVersion: "positions-v1", harnessId: "agent-player-3-langgraph-v1", modelSelection: { modelId: "gpt-terra" as const, reasoningEffort: "medium" as const } };
+    const input = { name: "Test · prompt v2 雪", split: "test" as const, datasetVersion: "positions-v1", harnessId: "agent-player-3-langgraph-v1", modelSelection: { modelId: "gpt-terra" as const } };
     await matchApi.createPositionQueue(input);
     await matchApi.listPositionQueues();
     await matchApi.getPositionQueue("queue/id");
@@ -69,7 +69,7 @@ describe("matchApi", () => {
       }),
     ));
     vi.stubGlobal("fetch", fetchMock);
-    const modelSelection = { modelId, reasoningEffort: "medium" as const };
+    const modelSelection = { modelId };
     const matchInput = {
       whiteHarnessId: "agent-player-2-langgraph-v1",
       blackHarnessId: "baseline-direct-submit-langgraph-v1",

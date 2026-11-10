@@ -7,7 +7,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class AgentConfig:
     model: str
-    reasoning_effort: str = "medium"
+    reasoning_effort: str | None = None
     retry_reasoning_effort: str = "none"
     max_output_tokens: int = 2000
     retry_max_output_tokens: int = 600
@@ -40,6 +40,6 @@ class AgentConfig:
     def from_env(cls):
         return cls(
             model=os.getenv("LMSTUDIO_MODEL", ""),
-            reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+            reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT") or None,
             retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
         )

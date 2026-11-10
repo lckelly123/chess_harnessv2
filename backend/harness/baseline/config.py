@@ -7,7 +7,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class BaselineConfig:
     model: str
-    reasoning_effort: str = "medium"
+    reasoning_effort: str | None = None
     retry_reasoning_effort: str = "none"
     max_output_tokens: int = 4000  # Legacy direct-submit baseline cap per call.
     retry_max_output_tokens: int = 600
@@ -42,6 +42,6 @@ class BaselineConfig:
     def from_env(cls):
         return cls(
             model=os.getenv("LMSTUDIO_MODEL", ""),
-            reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT", "medium"),
+            reasoning_effort=os.getenv("LMSTUDIO_REASONING_EFFORT") or None,
             retry_reasoning_effort=os.getenv("LMSTUDIO_RETRY_REASONING_EFFORT", "none"),
         )

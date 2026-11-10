@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-
 from grpo_capture.worker import (
     CaptureWorker,
     CompleteBody,
@@ -235,6 +234,7 @@ def cpu_engine(logits_steps, *, max_length=10, top_k=1):
         eos_token_id = 3
 
         def apply_chat_template(self, *args, **kwargs):
+            self.template_options = kwargs
             return "exact rendered prompt"
 
         def encode(self, text, **kwargs):
@@ -286,6 +286,45 @@ def test_each_selected_id_uses_same_steps_raw_logits_and_sampler_probabilities()
     assert engine.model.calls[1]["position_ids"].tolist() == [[2]]
     assert engine.model.calls[1]["past_key_values"] == (0,)
     assert capture["finish_reason"] == "stop"
+
+
+def test_default_capture_preserves_model_template_thinking_default():
+    engine = cpu_engine([[0, 0, 0, 7]])
+    engine.generate(generation_body(), threading.Event())
+    assert "enable_thinking" not in engine.tokenizer.template_options
+    assert "reasoning_effort" not in engine.tokenizer.template_options
+    assert engine.tokenizer.template_options["add_generation_prompt"] is True
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_explicit_thinking_override_is_honored(enabled):
+    engine = cpu_engine([[0, 0, 0, 7]])
+    engine.settings.sampling.enable_thinking = enabled
+    engine.generate(generation_body(), threading.Event())
+    assert engine.tokenizer.template_options["enable_thinking"] is enabled
+
+
+def test_sampler_matches_transformers_with_studio_min_p():
+    torch = pytest.importorskip("torch")
+    processors = pytest.importorskip("transformers.generation.logits_process")
+    # The tail survives top-p but is removed by min-p; include a repeated token.
+    logits = torch.tensor([0.0, 1.0, 7.0, 2.0, -4.0, -5.0])
+    settings = SamplingSettings(
+        temperature=0.6, top_k=5, top_p=1.0, min_p=0.01, repetition_penalty=1.2
+    )
+    ids = torch.tensor([[0, 2]])
+    expected = logits[None].clone()
+    for processor in (
+        processors.RepetitionPenaltyLogitsProcessor(1.2),
+        processors.TemperatureLogitsWarper(0.6),
+        processors.TopKLogitsWarper(5),
+        processors.TopPLogitsWarper(1.0),
+        processors.MinPLogitsWarper(0.01),
+    ):
+        expected = processor(ids, expected)
+    actual = sampling_scores(torch, logits, [0, 2], settings)
+    torch.testing.assert_close(actual, expected[0])
+    assert torch.isneginf(actual[1])
 
 
 def test_generation_error_preserves_exact_partial_token_arrays():

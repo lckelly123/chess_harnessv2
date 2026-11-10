@@ -8,7 +8,14 @@ from uuid import uuid4
 
 import chess
 import pytest
+from codex_training.jobs import WorkerJobs
+from codex_training.service import CodexTrainingService
 from fastapi.testclient import TestClient
+from positional_testing.models import CreatePositionQueueRequest, PositionQueueDetail
+from positional_testing.queue import PositionQueueManager
+from positional_testing.queue_repository import QueueConflictError, QueueRepository
+from positional_testing.run_repository import RunRepository
+from positional_testing.runner import PositionalTestRunner
 from pydantic import ValidationError
 
 from app.main import create_app
@@ -16,15 +23,8 @@ from app.matches.catalog import AGENT_PLAYER_2_ID, HARNESSES, UnknownHarnessErro
 from app.matches.repository import MatchRepository
 from app.models import ModelSelection
 from chess_core import normalize_move
-from codex_training.jobs import WorkerJobs
-from codex_training.service import CodexTrainingService
 from harness.contracts import MoveDecision
 from harness.recording import current_recorder
-from positional_testing.models import CreatePositionQueueRequest, PositionQueueDetail
-from positional_testing.queue import PositionQueueManager
-from positional_testing.queue_repository import QueueConflictError, QueueRepository
-from positional_testing.run_repository import RunRepository
-from positional_testing.runner import PositionalTestRunner
 
 SEED = Path(__file__).resolve().parents[2] / "positional_testing/datasets/seed/v1"
 
@@ -796,7 +796,6 @@ def test_full_split_membership_duplicate_start_and_stop_before_start(
     assert {str(i["position_id"]) for i in result["items"]} == expected
     assert result["model_selection"] == {
         "model_id": "gpt-terra",
-        "reasoning_effort": "medium",
         "model_name": None,
     }
     with pytest.raises(QueueConflictError):

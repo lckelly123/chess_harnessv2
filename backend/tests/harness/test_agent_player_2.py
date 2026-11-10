@@ -204,7 +204,7 @@ def test_missing_running_thoughts_forces_retry_without_executing_tool(
     assert model.calls[1]["forced_retry"]
     assert model.calls[1]["dynamic_input"] == model.calls[0]["dynamic_input"]
     assert model.calls[1]["instructions"] == model.calls[0]["instructions"]
-    assert model.calls[1]["reasoning_effort"] == "medium"
+    assert model.calls[1]["reasoning_effort"] is None
     assert model.calls[1]["max_output_tokens"] == 2000
     assert "No tested lines yet." in model.calls[1]["dynamic_input"]
 

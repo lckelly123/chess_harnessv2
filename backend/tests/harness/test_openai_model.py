@@ -153,7 +153,7 @@ def test_gpt_runs_existing_graph_with_notes_batches_and_hidden_reasoning_retry(
     )
     assert state["forced_retry"] is False
     assert len(requests) == 4
-    assert [call["reasoning"]["effort"] for call in requests] == ["medium"] * 4
+    assert all("reasoning" not in call for call in requests)
     assert [call["max_output_tokens"] for call in requests] == [8000] * 4
     assert requests[1] == requests[0]
     assert "Test e4 before judging it." in requests[2]["input"][1]["content"]

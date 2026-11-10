@@ -74,13 +74,63 @@ class CaptureClient:
                 "Connection to the GRPO capture worker was interrupted."
             ) from exc
 
-    async def prepare(self, model_name, session_id):
+    async def inference_defaults(self):
+        """Resolve the same defaults used by Studio's Responses -> Chat route.
+
+        Normal harness requests omit sampling and reasoning overrides. Read the
+        running server's schema rather than inventing a second capture profile.
+        This is API inference configuration, not the Studio chat UI's preferences.
+        """
+        base_url, key = unsloth_connection()
+        studio_url = base_url.rstrip("/").removesuffix("/v1")
+        try:
+            response = await self.http.get(
+                studio_url + "/openapi.json",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            properties = response.json()["components"]["schemas"][
+                "ChatCompletionRequest"
+            ]["properties"]
+            sampling = {
+                name: properties[name]["default"]
+                for name in (
+                    "temperature",
+                    "top_p",
+                    "top_k",
+                    "min_p",
+                    "repetition_penalty",
+                )
+            }
+            sampling["enable_thinking"] = properties["enable_thinking"].get("default")
+            # These controls are not implemented by the capture decoder. Refuse
+            # changed server defaults rather than silently collect another policy.
+            for name, expected in (
+                ("presence_penalty", 0),
+                ("frequency_penalty", 0),
+                ("logit_bias", None),
+                ("stop", None),
+                ("reasoning_effort", None),
+            ):
+                if properties[name].get("default") != expected:
+                    raise ValueError(f"Unsupported Studio default for {name}.")
+            return sampling
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+            raise CaptureUnavailable(
+                "Could not resolve Unsloth Studio's default inference settings. "
+                "Keep Studio running; no capture-specific defaults will be substituted."
+            ) from exc
+
+    async def prepare(self, model_name, session_id, sampling):
         return await self.post(
             "/prepare",
             {
                 "model_name": model_name,
                 "session_id": session_id,
                 "max_seq_length": 8192,
+                "sampling": sampling,
+                "sampling_source": "unsloth_studio_openapi_chat_completion_defaults",
             },
             timeout=600,
         )
@@ -188,7 +238,6 @@ class CaptureModel:
                 {"role": "developer", "content": instructions},
                 {"role": "user", "content": dynamic_input},
             ],
-            "reasoning": {"effort": reasoning_effort},
             "max_output_tokens": max_output_tokens,
             "store": False,
         }

@@ -8,14 +8,14 @@ import httpx2
 import pytest
 from conftest import JUSTIFICATION, call, thoughtful_batch, thoughtful_call
 from openai import AsyncOpenAI
+from positional_testing.exchange import output_blocks, present_exchange
+from positional_testing.recording import PassRecorder
 
 from harness.agent_player_2 import AgentConfig, AgentPlayer2
 from harness.baseline import BaselineAgent, BaselineConfig
 from harness.contracts import HarnessError
 from harness.model import LMStudioModel, NativeToolTurn, OpenAIModel, UnslothModel
 from harness.recording import complete_pass, current_recorder
-from positional_testing.exchange import output_blocks, present_exchange
-from positional_testing.recording import PassRecorder
 
 
 def envelope(output, status="completed"):
@@ -254,7 +254,7 @@ def test_chess_harness_retries_preserve_exact_wire_input_and_failed_output(
     assert asyncio.run(run()).move.san == "e4"
     assert requests[1] == requests[2]
     assert requests[1]["max_output_tokens"] == 2000
-    assert requests[1]["reasoning"] == {"effort": "medium"}
+    assert "reasoning" not in requests[1]
     assert "Rejected" not in requests[2]["input"][-1]["content"]
     for number in range(1, 5):
         saved = run_store.get_pass_exchange(recorder.run_id, number)

@@ -1,11 +1,18 @@
 """Offline, fixed-advantage clipped policy training with Unsloth.
 
-This is a PPO/GRPO-style surrogate, not group-relative reward calculation. A is
-supplied unchanged by the caller. No generation, reward calculation, baseline,
-KL penalty, deduplication, or retokenization happens here.
+This is a PPO/GRPO-style surrogate. GRPO_rewards.py supplies one fixed A per
+model pass from batch-relative CP loss and a 2.0 harness rejection penalty.
+Explicit inline A or --advantages overrides this helper without transformation.
+No generation, KL penalty, deduplication, or retokenization happens here.
 
-Inputs: --adapter-path, --data (capture directories or JSONL files), and either
-an inline numeric "A" on every record or --advantages pointing to JSONL like:
+Running without arguments uses the prepared v2 dataset, reads its starting
+adapter from capture_config.json, and prompts for the new policy name, epochs,
+clipping and gradient accumulation. The new policy is a sibling of the starting
+adapter. --adapter-path and --data override those inputs. For unattended use,
+pass --non-interactive and --policy-name (or an explicit --output-dir).
+
+To supply a different reward function, use inline numeric "A" on every record
+or --advantages JSONL like:
     {"run_id": "<run UUID>", "call_index": 3, "A": -1.0}
 Omit call_index to assign A to a whole trajectory/run. A per-call entry overrides
 a per-run entry. With a sidecar, ONLY matched calls are selected. This lets the
@@ -35,8 +42,17 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+if __package__:
+    from .GRPO_rewards import DEFAULT_HARNESS_PENALTY, supply_advantages
+else:
+    from GRPO_rewards import DEFAULT_HARNESS_PENALTY, supply_advantages
+
 RAW_LOGPROBS = "natural_log_softmax_raw_model_logits"
 TOKENIZER_FILES = ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja")
+DEFAULT_DATA = (
+    Path(__file__).resolve().parent
+    / "training_data/RL_testing/middlegame_move20_v2/training_setv2_grpo.jsonl"
+)
 
 
 @dataclass
@@ -157,7 +173,7 @@ def validate_sample(row: dict, advantage: float, location: str, max_length: int)
     )
 
 
-def load_data(paths, advantages, capture_config, max_length):
+def resolve_data_files(paths):
     files = []
     for supplied in paths:
         path = Path(supplied).resolve()
@@ -170,6 +186,11 @@ def load_data(paths, advantages, capture_config, max_length):
             if not candidate.is_file() or candidate in files:
                 raise ValueError(f"Missing or duplicate data file: {candidate}")
             files.append(candidate)
+    return files
+
+
+def load_data(paths, advantages, capture_config, max_length):
+    files = resolve_data_files(paths)
     samples, metadata, seen, used = [], {}, set(), set()
     excluded = 0
     for path in files:
@@ -217,6 +238,24 @@ def load_data(paths, advantages, capture_config, max_length):
     if not samples or not any(sample.advantage != 0 for sample in samples):
         raise ValueError("Select at least one call with a nonzero supplied A")
     return samples, metadata, files, excluded
+
+
+def resolve_advantages(args):
+    """Keep supplied rewards intact; otherwise use the separate CP-loss helper."""
+    if args.advantages:
+        return load_advantages(args.advantages), {
+            "source": "supplied_sidecar",
+            "normalization": "none",
+        }
+    files = resolve_data_files(args.data)
+    inline = {"A" in row for path in files for _, row in jsonl(path)}
+    if inline == {True, False}:
+        raise ValueError(
+            "Mixed inline A and missing A; supply A for every call or remove all A fields"
+        )
+    if inline == {True}:
+        return None, {"source": "supplied_inline", "normalization": "none"}
+    return supply_advantages(files, args.capture_config, args.harness_penalty)
 
 
 def check_adapter(adapter: Path, metadata: dict, allow_mismatch: bool):
@@ -435,7 +474,18 @@ def write_json(path: Path, value):
     temporary.replace(path)
 
 
+def print_progress(epoch, epochs, completed, total, steps, *, active=None, note=""):
+    message = f"Epoch {epoch}/{epochs} | completed {completed}/{total} examples"
+    if active is not None:
+        message += f" | processing example {active}/{total}"
+    message += f" | weight updates: {steps}"
+    if note:
+        message += f" | {note}"
+    print(message, flush=True)
+
+
 def train(args, samples, identity, report):
+    print("Loading the base model and starting QLoRA adapter...", flush=True)
     model, tokenizer, params, transform = load_model(args, identity)
     import torch
 
@@ -468,13 +518,32 @@ def train(args, samples, identity, report):
             for epoch in range(args.epochs):
                 order = list(samples)
                 rng.shuffle(order)
+                completed = 0
+                print_progress(epoch + 1, args.epochs, completed, len(order), steps)
                 for start in range(0, len(order), args.gradient_accumulation_steps):
                     group = order[start : start + args.gradient_accumulation_steps]
                     metrics = Counter()
                     nonzero = 0
                     for sample in group:
                         if sample.advantage == 0:
+                            completed += 1
+                            print_progress(
+                                epoch + 1,
+                                args.epochs,
+                                completed,
+                                len(order),
+                                steps,
+                                note="A=0; skipped gradient calculation",
+                            )
                             continue
+                        print_progress(
+                            epoch + 1,
+                            args.epochs,
+                            completed,
+                            len(order),
+                            steps,
+                            active=completed + 1,
+                        )
                         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                             current = completion_logprobs(
                                 model,
@@ -499,6 +568,15 @@ def train(args, samples, identity, report):
                         metrics.update(call_metrics)
                         nonzero += 1
                         del current, old, mask, loss
+                        completed += 1
+                        print_progress(
+                            epoch + 1,
+                            args.epochs,
+                            completed,
+                            len(order),
+                            steps,
+                            note=f"backpropagation complete; accumulation {completed - start}/{len(group)}",
+                        )
                     if not nonzero:
                         continue
                     norm = torch.nn.utils.clip_grad_norm_(
@@ -510,6 +588,9 @@ def train(args, samples, identity, report):
                     row = {
                         "step": steps,
                         "epoch": epoch + 1,
+                        "epochs": args.epochs,
+                        "examples_completed": completed,
+                        "examples_in_epoch": len(order),
                         "calls": len(group),
                         "loss": metrics["loss"] / len(group),
                         "ratio_mean": metrics["ratio_mean"] / nonzero,
@@ -520,11 +601,27 @@ def train(args, samples, identity, report):
                     }
                     log.write(json.dumps(row, allow_nan=False) + "\n")
                     log.flush()
-                    print(json.dumps(row), flush=True)
+                    print_progress(
+                        epoch + 1,
+                        args.epochs,
+                        completed,
+                        len(order),
+                        steps,
+                        note=(
+                            f"weight update {steps} applied; loss {row['loss']:.5f}; "
+                            f"clipped {row['clip_fraction']:.1%}; "
+                            f"peak VRAM {row['peak_vram_gib']:.2f} GiB"
+                        ),
+                    )
                     if args.max_steps and steps >= args.max_steps:
                         break
                 if args.max_steps and steps >= args.max_steps:
+                    print(
+                        f"Reached the limit of {args.max_steps} weight updates.",
+                        flush=True,
+                    )
                     break
+        print(f"Saving the new policy to {args.output_dir} ...", flush=True)
         model.save_pretrained(str(args.output_dir), safe_serialization=True)
         tokenizer.save_pretrained(str(args.output_dir))
         saved_config = read_json(args.output_dir / "adapter_config.json")
@@ -533,6 +630,10 @@ def train(args, samples, identity, report):
         )
         write_json(args.output_dir / "adapter_config.json", saved_config)
         report.update(status="completed", finished_at=utc_now(), optimizer_steps=steps)
+        print(
+            f"Saved {args.output_dir.name}: {steps} weight updates completed.",
+            flush=True,
+        )
     except BaseException as error:
         report.update(
             status="failed",
@@ -545,38 +646,174 @@ def train(args, samples, identity, report):
         write_json(args.output_dir / "training_run.json", report)
 
 
+def policy_output(adapter: Path, name: str) -> Path:
+    """Interpret a policy name as one folder beside the previous adapter."""
+    reserved = {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+    reserved.update(f"{prefix}{n}" for prefix in ("COM", "LPT") for n in range(1, 10))
+    if (
+        not name
+        or name in {".", ".."}
+        or len(name) > 120
+        or name != name.strip()
+        or name.endswith(".")
+        or any(char in '<>:"/\\|?*' or ord(char) < 32 for char in name)
+        or name.split(".")[0].upper() in reserved
+    ):
+        raise ValueError(
+            "Use a folder name of 1-120 characters, without paths or reserved filename characters."
+        )
+    parent = adapter.resolve().parent
+    output = parent / name
+    if output.exists() or output.is_symlink():
+        raise ValueError(
+            f"A policy or file already exists at {output}; choose a new name."
+        )
+    if output.resolve().parent != parent:
+        raise ValueError("The new policy must be saved beside the starting adapter.")
+    return output
+
+
+def infer_adapter(args) -> Path:
+    paths = set()
+    for data in args.data:
+        config_path = args.capture_config or (
+            data / "capture_config.json"
+            if data.is_dir()
+            else data.parent / "capture_config.json"
+        )
+        captured = read_json(config_path).get("capture_worker", {}).get("adapter_path")
+        if not isinstance(captured, str) or not Path(captured).is_absolute():
+            raise ValueError(
+                f"{config_path}: specify --adapter-path for the starting checkpoint"
+            )
+        paths.add(Path(captured).resolve())
+    if len(paths) != 1:
+        raise ValueError(
+            "Specify --adapter-path when the datasets name different starting adapters"
+        )
+    return paths.pop()
+
+
+def prompt_value(label, default, convert, valid, message, read):
+    while True:
+        text = read(
+            f"{label}" + (f" [{default}]" if default is not None else "") + ": "
+        ).strip()
+        try:
+            value = default if not text and default is not None else convert(text)
+            if not valid(value):
+                raise ValueError(message)
+            return value
+        except (ValueError, TypeError):
+            print(message, flush=True)
+
+
+def configure_run(args, read=None):
+    """Resolve interactive settings before validation or any GPU/model imports."""
+    args.adapter_path = (args.adapter_path or infer_adapter(args)).resolve()
+    if not (args.adapter_path / "adapter_config.json").is_file():
+        raise ValueError(f"Starting adapter not found: {args.adapter_path}")
+    # Explicit output-dir preserves the original unattended CLI behavior.
+    interactive = not (args.non_interactive or args.validate_only or args.output_dir)
+    if interactive:
+        print(f"Starting adapter: {args.adapter_path}")
+        for data in args.data:
+            print(f"Training data: {data.resolve()}")
+        read = input if read is None else read
+        while True:
+            name = prompt_value(
+                "New policy name",
+                args.policy_name,
+                str,
+                bool,
+                "Enter a name for the new policy.",
+                read,
+            )
+            try:
+                args.output_dir = policy_output(args.adapter_path, name)
+                args.policy_name = name
+                break
+            except ValueError as error:
+                print(str(error), flush=True)
+        args.epochs = prompt_value(
+            "Epochs",
+            args.epochs,
+            int,
+            lambda n: n > 0,
+            "Epochs must be a positive integer.",
+            read,
+        )
+        args.clip_epsilon = prompt_value(
+            "Clipping",
+            args.clip_epsilon,
+            float,
+            lambda n: 0 < n < 1,
+            "Clipping must be a number between 0 and 1.",
+            read,
+        )
+        args.gradient_accumulation_steps = prompt_value(
+            "No. calls gradient accum",
+            args.gradient_accumulation_steps,
+            int,
+            lambda n: n > 0,
+            "Gradient accumulation must be a positive integer.",
+            read,
+        )
+        print(f"New policy will be saved to: {args.output_dir}", flush=True)
+    elif args.policy_name:
+        args.output_dir = policy_output(args.adapter_path, args.policy_name)
+    if args.output_dir is None and not args.validate_only:
+        raise ValueError(
+            "Supply --policy-name or --output-dir for a non-interactive run"
+        )
+    return args
+
+
 def parser():
     result = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     result.add_argument(
         "--adapter-path",
-        required=True,
         type=Path,
-        help="Existing QLoRA checkpoint to update",
+        help="Existing QLoRA checkpoint; defaults to the adapter recorded in capture metadata",
     )
     result.add_argument(
         "--data",
-        required=True,
+        default=[DEFAULT_DATA],
         nargs="+",
         type=Path,
-        help="Capture directories or prepared JSONL files",
+        help="Capture directories or JSONL files; defaults to the prepared training_setv2_grpo.jsonl",
     )
     result.add_argument(
         "--advantages",
         type=Path,
-        help="Supplied A values/selection as JSONL; otherwise require inline A",
+        help="Supplied A values/selection as JSONL; otherwise use inline A or the CP-loss helper",
+    )
+    result.add_argument(
+        "--harness-penalty",
+        type=float,
+        default=DEFAULT_HARNESS_PENALTY,
+        help="Per-rejected-call deduction for the CP-loss helper (default: %(default)s)",
     )
     result.add_argument(
         "--capture-config",
         type=Path,
         help="Original capture_config.json for relocated/prepared data",
     )
-    result.add_argument(
+    destination = result.add_mutually_exclusive_group()
+    destination.add_argument(
+        "--policy-name", help="New adapter folder name beside the starting adapter"
+    )
+    destination.add_argument(
         "--output-dir",
-        required=True,
         type=Path,
-        help="New directory for the updated adapter",
+        help="Explicit output directory for unattended use (skips terminal prompts)",
+    )
+    result.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Use CLI settings without terminal prompts",
     )
     result.add_argument(
         "--validate-only",
@@ -619,6 +856,8 @@ def parser():
 
 
 def prepare(args):
+    if not math.isfinite(args.harness_penalty) or args.harness_penalty < 0:
+        raise ValueError("harness_penalty must be finite and nonnegative")
     for name in ("learning_rate", "max_grad_norm"):
         if not math.isfinite(getattr(args, name)) or getattr(args, name) <= 0:
             raise ValueError(f"{name} must be finite and positive")
@@ -635,17 +874,30 @@ def prepare(args):
     if args.max_steps < 0 or not 0 <= args.seed < 2**32:
         raise ValueError("max_steps must be nonnegative and seed must be in [0, 2**32)")
     args.adapter_path = args.adapter_path.resolve()
-    args.output_dir = args.output_dir.resolve()
-    advantages = load_advantages(args.advantages)
+    if args.output_dir is not None:
+        args.output_dir = args.output_dir.resolve()
+    elif not args.validate_only:
+        raise ValueError("A new policy output directory is required")
+    advantages, reward_report = resolve_advantages(args)
     samples, metadata, files, excluded = load_data(
         args.data, advantages, args.capture_config, args.max_seq_length
     )
     identity = check_adapter(args.adapter_path, metadata, args.allow_adapter_mismatch)
-    check_output(args.output_dir, args.adapter_path, files)
+    if args.output_dir is not None:
+        check_output(args.output_dir, args.adapter_path, files)
     report = {
         "algorithm": "fixed_advantage_clipped_raw_policy_surrogate",
         "kl_coefficient": 0,
-        "advantage_normalization": "none",
+        "advantage_normalization": reward_report["normalization"],
+        "reward": reward_report,
+        "per_call_advantages": [
+            {
+                "run_id": sample.key[0],
+                "call_index": sample.key[1],
+                "A": sample.advantage,
+            }
+            for sample in samples
+        ],
         "loss_reduction": "mean active completion tokens per call, then mean calls",
         "sampling_correction": "none; filtered and selected offline data",
         "identity": identity,
@@ -671,6 +923,7 @@ def prepare(args):
 def main(argv=None):
     args = parser().parse_args(argv)
     try:
+        configure_run(args)
         samples, identity, report = prepare(args)
         print(
             json.dumps(
@@ -680,6 +933,10 @@ def main(argv=None):
                     "positive_A": report["positive_A"],
                     "negative_A": report["negative_A"],
                     "zero_A": report["zero_A"],
+                    "advantage_source": report["reward"]["source"],
+                    "harness_penalty": report["reward"].get("harness_penalty"),
+                    "min_A": min(sample.advantage for sample in samples),
+                    "max_A": max(sample.advantage for sample in samples),
                     "max_sequence_tokens": report["max_sequence_tokens"],
                     "off_policy_start": identity["off_policy_start"],
                 }
@@ -691,8 +948,18 @@ def main(argv=None):
                 "Validation only: no model loaded, no training started, no output written."
             )
             return 0
+        updates_per_epoch = math.ceil(len(samples) / args.gradient_accumulation_steps)
+        print(
+            f"Training {args.epochs} epoch(s), {len(samples)} examples per epoch; "
+            f"up to {updates_per_epoch} weight updates per epoch. "
+            f"Clipping={args.clip_epsilon}, accumulation={args.gradient_accumulation_steps}.",
+            flush=True,
+        )
         train(args, samples, identity, report)
         return 0
+    except (EOFError, KeyboardInterrupt):
+        print("\nCancelled.", file=sys.stderr)
+        return 130
     except (ValueError, OSError) as error:
         print(f"GRPO_trainer: {error}", file=sys.stderr)
         return 2

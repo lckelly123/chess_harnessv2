@@ -11,8 +11,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "GRPO_trainer.py"
+sys.path.insert(0, str(SCRIPT.parent))
 spec = importlib.util.spec_from_file_location("grpo_training", SCRIPT)
 trainer = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = trainer
@@ -68,6 +70,7 @@ class InputTests(unittest.TestCase):
         (self.adapter / "adapter_model.safetensors").write_bytes(b"fixture weights")
         (self.adapter / "tokenizer.json").write_text("{}", encoding="utf-8")
         self.worker = {
+            "adapter_path": str(self.adapter),
             "base_model": "base/model",
             "base_model_revision": "revision-one",
             "adapter_sha256": trainer.sha256(
@@ -102,6 +105,85 @@ class InputTests(unittest.TestCase):
         dump_jsonl(self.data, [record(A=-2.75, harness_rejected=False)])
         samples, *_ = self.load()
         self.assertEqual(samples[0].advantage, -2.75)
+
+    def make_reward_collection(self):
+        # The worst completed trajectory is absent from the selected dataset.
+        # Its engine score must still set the full batch's normalization range.
+        dump_jsonl(self.data, [record(), record(2, harness_rejected=True)])
+        dump_jsonl(self.root / "trajectory_02.jsonl", [record(run_id="worst")])
+        dump_jsonl(self.root / "trajectory_03.jsonl", [record(run_id="failed")])
+        dump_jsonl(self.root / "trajectory_04.jsonl", [record(run_id="middle")])
+        dump_json(
+            self.root / "manifest.json",
+            {
+                "trajectories": [
+                    {"trajectory": 1, "status": "completed", "cp_loss": 2},
+                    {"trajectory": 2, "status": "completed", "cp_loss": 438},
+                    {"trajectory": 3, "status": "failed", "cp_loss": None},
+                    {"trajectory": 4, "status": "completed", "cp_loss": 51},
+                ]
+            },
+        )
+        prepared = self.root / "prepared.jsonl"
+        dump_jsonl(
+            prepared,
+            [
+                record(),
+                record(2, harness_rejected=True),
+                record(run_id="failed"),
+                record(run_id="middle"),
+            ],
+        )
+        return prepared
+
+    def test_prepare_supplies_per_pass_rewards_from_full_batch(self):
+        prepared = self.make_reward_collection()
+        original = prepared.read_bytes()
+        args = trainer.configure_run(
+            trainer.parser().parse_args(["--data", str(prepared), "--validate-only"])
+        )
+        samples, _, report = trainer.prepare(args)
+        self.assertEqual([s.advantage for s in samples[:3]], [1, -1, -1])
+        self.assertAlmostEqual(samples[3].advantage, 0.7752293577981652)
+        self.assertEqual(report["reward"]["harness_penalty"], 2.0)
+        self.assertEqual(report["reward"]["batches"][0]["max_cp_loss"], 438)
+        self.assertEqual(len(report["per_call_advantages"]), 4)
+        self.assertEqual(report["per_call_advantages"][1]["A"], -1)
+        self.assertEqual(prepared.read_bytes(), original)
+
+    def test_helper_validation_imports_no_gpu_libraries_or_starts_training(self):
+        prepared = self.make_reward_collection()
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                f"import sys; sys.path.insert(0, {str(SCRIPT.parent)!r}); "
+                "import GRPO_trainer as t; "
+                f"assert t.main(['--data', {str(prepared)!r}, '--validate-only']) == 0; "
+                "assert 'torch' not in sys.modules and 'unsloth' not in sys.modules",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('"advantage_source": "cp_loss_helper"', result.stdout)
+
+    def test_supplied_advantages_override_helper_and_mixed_inline_is_rejected(self):
+        prepared = self.make_reward_collection()
+        args = trainer.parser().parse_args(["--data", str(prepared)])
+        dump_jsonl(self.advantages, [{"run_id": "run-one", "A": -2}])
+        args.advantages = self.advantages
+        values, report = trainer.resolve_advantages(args)
+        self.assertEqual(values, {("run-one", None): -2})
+        self.assertEqual(report["source"], "supplied_sidecar")
+        args.advantages = None
+        dump_jsonl(prepared, [record(A=3), record(2, A=-3)])
+        values, report = trainer.resolve_advantages(args)
+        self.assertIsNone(values)
+        self.assertEqual(report["source"], "supplied_inline")
+        dump_jsonl(prepared, [record(A=3), record(2)])
+        with self.assertRaisesRegex(ValueError, "Mixed inline"):
+            trainer.resolve_advantages(args)
 
     def test_sidecar_selects_calls_and_call_overrides_run(self):
         dump_jsonl(self.data, [record(), record(2), record(3, run_id="unselected")])
@@ -216,6 +298,7 @@ class InputTests(unittest.TestCase):
         # uses torch for tiny CPU loss checks.
         code = (
             "import importlib.util,sys; "
+            f"sys.path.insert(0, {str(SCRIPT.parent)!r}); "
             f"s=importlib.util.spec_from_file_location('t', {str(SCRIPT)!r}); "
             "m=importlib.util.module_from_spec(s); sys.modules['t']=m; "
             "s.loader.exec_module(m); "
@@ -233,6 +316,122 @@ class InputTests(unittest.TestCase):
             self.assertEqual(
                 trainer.main(self.cli("--learning-rate", "nan", "--validate-only")), 2
             )
+
+    def test_interactive_settings_save_beside_previous_adapter(self):
+        args = trainer.parser().parse_args(["--data", str(self.data)])
+        answers = iter(["policy_v2", "2", "0.15", "4"])
+        prompts = []
+
+        def read(prompt):
+            prompts.append(prompt)
+            return next(answers)
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            trainer.configure_run(args, read=read)
+        self.assertEqual(args.adapter_path, self.adapter.resolve())
+        self.assertEqual(args.output_dir, self.adapter.parent / "policy_v2")
+        self.assertEqual(
+            (args.epochs, args.clip_epsilon, args.gradient_accumulation_steps),
+            (2, 0.15, 4),
+        )
+        self.assertEqual(len(prompts), 4)
+        self.assertTrue(prompts[0].startswith("New policy name"))
+        self.assertFalse(args.output_dir.exists())
+
+    def test_interactive_reprompts_for_bad_names_and_numbers(self):
+        args = trainer.parser().parse_args(["--data", str(self.data)])
+        answers = iter(
+            [
+                "../escape",
+                "adapter",
+                "policy_v2",
+                "0",
+                "2.5",
+                "",
+                "nan",
+                "1.5",
+                "",
+                "-2",
+                "",
+            ]
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            trainer.configure_run(args, read=lambda _: next(answers))
+        self.assertEqual(args.output_dir, self.root / "policy_v2")
+        self.assertEqual(
+            (args.epochs, args.clip_epsilon, args.gradient_accumulation_steps),
+            (1, 0.2, 8),
+        )
+
+    def test_policy_names_cannot_escape_or_overwrite(self):
+        for name in [
+            "",
+            ".",
+            "..",
+            "../escape",
+            "C:\\new",
+            "a/b",
+            "a\\b",
+            "NUL",
+            "COM1.txt",
+            "end.",
+            "space ",
+            "adapter",
+        ]:
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                trainer.policy_output(self.adapter, name)
+
+    def test_noninteractive_policy_name_never_prompts(self):
+        args = trainer.parser().parse_args(
+            [
+                "--data",
+                str(self.data),
+                "--policy-name",
+                "policy_v2",
+                "--non-interactive",
+            ]
+        )
+        trainer.configure_run(args, read=lambda _: self.fail("Unexpected prompt"))
+        self.assertEqual(args.output_dir, self.root / "policy_v2")
+
+    def test_validation_needs_no_policy_name_or_terminal(self):
+        with (
+            patch("builtins.input", side_effect=AssertionError("Unexpected prompt")),
+            patch.object(
+                trainer, "load_model", side_effect=AssertionError("Model loaded")
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                trainer.main(["--data", str(self.data), "--validate-only"]), 0
+            )
+
+    def test_cancelled_prompt_never_starts_training(self):
+        with (
+            patch("builtins.input", side_effect=EOFError),
+            patch.object(trainer, "train") as train,
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(trainer.main(["--data", str(self.data)]), 130)
+            train.assert_not_called()
+
+    def test_interactive_main_passes_requested_settings_to_trainer(self):
+        with (
+            patch("builtins.input", side_effect=["new_policy", "3", "0.25", "16"]),
+            patch.object(trainer, "train") as train,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(trainer.main(["--data", str(self.data)]), 0)
+        args, samples, _, report = train.call_args.args
+        self.assertEqual(args.output_dir, self.root / "new_policy")
+        self.assertEqual(
+            (args.epochs, args.clip_epsilon, args.gradient_accumulation_steps),
+            (3, 0.25, 16),
+        )
+        self.assertEqual(len(samples), 1)
+        self.assertEqual(report["settings"]["policy_name"], "new_policy")
+        self.assertFalse(args.output_dir.exists())
 
 
 @unittest.skipIf(torch is None, "PyTorch is required for CPU loss checks")
@@ -313,6 +512,112 @@ class LossTests(unittest.TestCase):
         self.assertEqual(model.input_ids, [[1, 2, 3, 4, 5]])
         self.assertFalse(model.kwargs["use_cache"])
         self.assertEqual(model.kwargs["position_ids"].tolist(), [[0, 1, 2, 3, 4]])
+
+
+@unittest.skipIf(torch is None, "PyTorch is required for CPU progress checks")
+class ProgressTests(unittest.TestCase):
+    def simulate(self, advantages, *, epochs=1, max_steps=0):
+        """Exercise loop/progress with a scalar CPU graph and a NO-OP optimizer.
+
+        No Unsloth, CUDA, pretrained weights, or parameter updates are involved.
+        """
+        parameter = torch.tensor(0.0, requires_grad=True)
+        gradients = []
+
+        class NoOpOptimizer:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def zero_grad(self, **kwargs):
+                parameter.grad = None
+
+            def step(self):
+                gradients.append(parameter.grad.item())
+
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "mock-policy"
+            args = trainer.parser().parse_args(
+                [
+                    "--output-dir",
+                    str(output),
+                    "--optimizer",
+                    "adamw",
+                    "--gradient-accumulation-steps",
+                    "2",
+                    "--max-grad-norm",
+                    "100",
+                    "--epochs",
+                    str(epochs),
+                    "--max-steps",
+                    str(max_steps),
+                ]
+            )
+            model = SimpleNamespace(
+                get_input_embeddings=lambda: SimpleNamespace(weight=torch.zeros(10, 2)),
+                save_pretrained=lambda path, **kw: dump_json(
+                    Path(path) / "adapter_config.json", {}
+                ),
+            )
+            tokenizer = SimpleNamespace(save_pretrained=lambda path: None)
+            samples = [
+                trainer.validate_sample(record(n + 1), a, "fixture", 8192)
+                for n, a in enumerate(advantages)
+            ]
+            console = io.StringIO()
+            report = {}
+            with (
+                patch.object(
+                    trainer,
+                    "load_model",
+                    return_value=(model, tokenizer, [parameter], None),
+                ),
+                patch.object(
+                    trainer,
+                    "completion_logprobs",
+                    side_effect=lambda model, sample, *a: (
+                        parameter + torch.tensor(sample.old_logprobs)
+                    ),
+                ),
+                patch.object(torch.optim, "AdamW", NoOpOptimizer),
+                patch.object(
+                    torch, "autocast", side_effect=lambda **kw: contextlib.nullcontext()
+                ),
+                patch.object(torch.cuda, "max_memory_allocated", return_value=0),
+                patch.object(
+                    trainer.random.Random, "shuffle", lambda self, values: None
+                ),
+                contextlib.redirect_stdout(console),
+            ):
+                trainer.train(args, samples, {}, report)
+            metrics = [
+                json.loads(line)
+                for line in (output / "metrics.jsonl").read_text().splitlines()
+            ]
+            self.assertEqual(parameter.item(), 0.0)
+            return console.getvalue(), gradients, metrics
+
+    def test_progress_and_partial_accumulation_group(self):
+        console, gradients, metrics = self.simulate([1, 1, -1])
+        self.assertEqual(gradients, [-1.0, 1.0])
+        self.assertIn("processing example 3/3", console)
+        self.assertIn("Epoch 1/1 | completed 3/3 examples | weight updates: 2", console)
+        self.assertEqual([row["examples_completed"] for row in metrics], [2, 3])
+        self.assertEqual([row["calls"] for row in metrics], [2, 1])
+
+    def test_zero_advantage_calls_count_as_processed_without_weight_updates(self):
+        console, gradients, metrics = self.simulate([0, 0, 1])
+        self.assertEqual(gradients, [-1.0])
+        self.assertIn("completed 2/3 examples | weight updates: 0 | A=0", console)
+        self.assertEqual(metrics[0]["examples_completed"], 3)
+
+    def test_progress_resets_for_each_epoch_and_respects_step_cap(self):
+        console, gradients, _ = self.simulate([1, 1, -1], epochs=2)
+        self.assertIn("Epoch 2/2 | completed 0/3 examples | weight updates: 2", console)
+        self.assertEqual(len(gradients), 4)
+        console, gradients, metrics = self.simulate([1, 1, -1], max_steps=1)
+        self.assertNotIn("processing example 3/3", console)
+        self.assertEqual(len(gradients), 1)
+        self.assertEqual(metrics[0]["examples_completed"], 2)
 
 
 if __name__ == "__main__":

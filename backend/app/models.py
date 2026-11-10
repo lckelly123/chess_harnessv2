@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def to_camel(value: str) -> str:
@@ -110,8 +110,19 @@ class ModelSelection(ApiModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     model_id: Literal["qwen", "gpt-terra", "unsloth"]
-    reasoning_effort: Literal["medium"] = "medium"
     model_name: str | None = Field(default=None, min_length=1, max_length=512)
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_legacy_medium(cls, value):
+        # Old saved queues / open browser tabs carried this fixed UI value.
+        # Accept those records without forwarding or reserializing the override.
+        if isinstance(value, dict):
+            value = dict(value)
+            for key in ("reasoningEffort", "reasoning_effort"):
+                if value.get(key) == "medium":
+                    value.pop(key)
+        return value
 
 
 class LoadedModelList(ApiModel):

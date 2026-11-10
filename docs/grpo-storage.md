@@ -83,10 +83,17 @@ and base model identity, tokenizer/chat template identity, harness version,
 effective sampling configuration, and probability conventions. These details
 do not clutter the manifest.
 
-Collection sampling is explicit and fixed: temperature `0.6`, top-p `0.95`,
-top-k `20`, repetition penalty `1.0`, and Qwen thinking mode disabled. These
-are capture-worker defaults, not inherited Studio chat preferences. The
-effective settings and independent per-call seeds are saved with the data.
+Before unloading the Studio model, collection reads the running Studio API's
+generation defaults from its OpenAPI schema, matching the ordinary harness
+Responses request. On the current installation these are temperature `0.6`,
+top-p `0.95`, top-k `20`, min-p `0.01`, and repetition penalty `1.0`.
+Neither path sends the old fixed `reasoning.effort: medium` parameter. Thinking
+is left to the model's chat-template default (enabled for this Qwen3 adapter),
+rather than explicitly disabled. Studio chat UI preferences are separate from
+these API defaults. Studio must be running so capture can resolve them; it does
+not silently fall back to a different profile. Settings, their source, and
+independent per-call seeds are saved with the data. Existing collections retain
+their original settings and token records.
 
 Each trajectory JSONL file contains one record per finished model call,
 including an interrupted call when its partial token capture is available.

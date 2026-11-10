@@ -71,7 +71,7 @@ export function ModelSelector({ selection, disabled, onChange, onReadyChange }: 
             if (modelId === selection.modelId) return;
             setInventory(null);
             onReadyChange(false);
-            onChange({ modelId, reasoningEffort: "medium" });
+            onChange({ modelId });
           }}
         >
           <option value="qwen">LM Studio</option>
@@ -92,9 +92,6 @@ export function ModelSelector({ selection, disabled, onChange, onReadyChange }: 
           </>}
         </select>
       </label>
-      <dl className="model-settings__reasoning">
-        <div><dt>Reasoning</dt><dd>Medium</dd></div>
-      </dl>
       <div className="model-settings__connection">
         <p id="model-routing-status" className={`model-settings__status${current?.error || unavailable ? " model-settings__status--error" : ""}`} role="status">
           <Server size={15} aria-hidden="true" /><span>{status}</span>

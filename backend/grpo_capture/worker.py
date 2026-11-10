@@ -33,8 +33,10 @@ class SamplingSettings(BaseModel):
     temperature: float = Field(default=0.6, gt=0, le=5, allow_inf_nan=False)
     top_p: float = Field(default=0.95, gt=0, le=1, allow_inf_nan=False)
     top_k: int = Field(default=20, ge=0, le=1000)
+    min_p: float = Field(default=0.01, ge=0, le=1, allow_inf_nan=False)
     repetition_penalty: float = Field(default=1.0, gt=0, le=3, allow_inf_nan=False)
-    enable_thinking: bool = False
+    # None leaves the model's chat-template default intact, as Studio does.
+    enable_thinking: bool | None = None
 
 
 class PrepareBody(BaseModel):
@@ -44,6 +46,7 @@ class PrepareBody(BaseModel):
     session_id: str | None = Field(default=None, min_length=1, max_length=128)
     max_seq_length: int = Field(default=8192, ge=128, le=32768)
     sampling: SamplingSettings = Field(default_factory=SamplingSettings)
+    sampling_source: str = "explicit_capture_settings"
 
 
 class CompleteBody(BaseModel):
@@ -140,6 +143,11 @@ def sampling_scores(torch, logits, seen_ids: list[int], settings: SamplingSettin
         remove[1:] = remove[:-1].clone()
         remove[0] = False
         scores[indices[remove]] = -float("inf")
+    if settings.min_p:
+        probabilities = torch.softmax(scores, dim=-1)
+        scores.masked_fill_(
+            probabilities < settings.min_p * probabilities.max(), -float("inf")
+        )
     return scores
 
 
@@ -293,10 +301,18 @@ class UnslothEngine:
                 "file_sha256": hashes,
                 "max_seq_length": settings.max_seq_length,
                 "sampling": settings.sampling.model_dump(),
+                "sampling_source": settings.sampling_source,
+                "thinking_mode": (
+                    "model_chat_template_default"
+                    if settings.sampling.enable_thinking is None
+                    else "enabled"
+                    if settings.sampling.enable_thinking
+                    else "disabled"
+                ),
                 "repetition_penalty_scope": "prompt_and_completion",
                 "old_logprobs_convention": "natural_log_softmax_raw_model_logits",
                 "sampling_logprobs_convention": (
-                    "natural_log_softmax_after_repetition_penalty_temperature_top_k_top_p"
+                    "natural_log_softmax_after_repetition_penalty_temperature_top_k_top_p_min_p"
                 ),
                 "prompt_overflow_policy": "reject; never silently truncate instructions",
                 "output_limit_policy": "min(requested_max_output_tokens, remaining_context)",
@@ -320,11 +336,14 @@ class UnslothEngine:
             raise ValueError(
                 "max_output_tokens must be an integer between 1 and 32768."
             )
+        template_options = {}
+        if self.settings.sampling.enable_thinking is not None:
+            template_options["enable_thinking"] = self.settings.sampling.enable_thinking
         rendered = self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=self.settings.sampling.enable_thinking,
+            **template_options,
         )
         prompt_ids = self.tokenizer.encode(rendered, add_special_tokens=False)
         capture = {

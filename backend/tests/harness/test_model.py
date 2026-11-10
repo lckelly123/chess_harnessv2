@@ -85,7 +85,7 @@ def test_local_request_contract_and_forced_retry(request_position):
         assert [item["role"] for item in payload["input"]] == ["developer", "user"]
         assert "<agent_tool_call>" in payload["input"][0]["content"]
         assert "test-local-secret" not in json.dumps(payload)
-    assert calls[0]["reasoning"] == {"effort": "medium"}
+    assert "reasoning" not in calls[0]
     assert calls[1]["reasoning"] == {"effort": "none"}
     assert calls[0]["max_output_tokens"] == 2000
     assert calls[1]["max_output_tokens"] == 600
@@ -192,7 +192,7 @@ def test_baseline_local_transport_and_nested_langsmith_trace(request_position):
     assert state["decision"]["move"] == "e4"
     assert state["rejected_calls"] == 1
     assert requests[0]["max_output_tokens"] == 4000
-    assert requests[0]["reasoning"] == {"effort": "medium"}
+    assert "reasoning" not in requests[0]
     for payload in requests[1:]:
         assert payload["max_output_tokens"] == 600
         assert payload["reasoning"] == {"effort": "none"}

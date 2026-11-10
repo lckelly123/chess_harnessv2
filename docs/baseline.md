@@ -127,7 +127,7 @@ For a live turn, use the same root `.env` configuration as Agent Player 1:
 LMSTUDIO_BASE_URL=http://host.docker.internal:1234/v1
 LMSTUDIO_MODEL=your-exact-served-model-id
 LMSTUDIO_API_KEY=lm-studio
-LMSTUDIO_REASONING_EFFORT=medium
+LMSTUDIO_REASONING_EFFORT=
 LMSTUDIO_RETRY_REASONING_EFFORT=none
 ```
 

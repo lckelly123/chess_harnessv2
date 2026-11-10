@@ -50,7 +50,7 @@ class Model(Protocol):
         model: str,
         instructions: str,
         dynamic_input: str,
-        reasoning_effort: str,
+        reasoning_effort: str | None,
         max_output_tokens: int,
         forced_retry: bool,
         native_turn: NativeToolTurn | None = None,
@@ -214,7 +214,7 @@ class _ResponsesModel:
         model: str,
         instructions: str,
         dynamic_input: str,
-        reasoning_effort: str,
+        reasoning_effort: str | None,
         max_output_tokens: int,
         forced_retry: bool,
         native_turn: NativeToolTurn | None = None,
@@ -237,11 +237,12 @@ class _ResponsesModel:
                 *history,
                 {"role": "user", "content": dynamic_input},
             ],
-            reasoning={"effort": reasoning_effort},
             max_output_tokens=max_output_tokens,
             store=False,
             **options,
         )
+        if reasoning_effort is not None:
+            request_body["reasoning"] = {"effort": reasoning_effort}
         recorder = current_recorder.get()
         if recorder is not None:
             await asyncio.to_thread(recorder.capture_input, request_body)

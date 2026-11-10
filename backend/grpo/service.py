@@ -7,12 +7,12 @@ from contextlib import suppress
 from dataclasses import asdict
 from uuid import uuid4
 
+from positional_testing.catalog import get_saved_position
+from positional_testing.runner import PositionalTestRunner, UnknownSavedPositionError
 from starlette.concurrency import run_in_threadpool
 
 from app.matches.catalog import AGENT_PLAYER_2_ID, HarnessCatalog
 from harness.agent_player_2.config import AgentConfig
-from positional_testing.catalog import get_saved_position
-from positional_testing.runner import PositionalTestRunner, UnknownSavedPositionError
 
 from .client import CaptureClient, CaptureModel, CaptureUnavailable
 from .recording import GrpoRecorder
@@ -119,7 +119,6 @@ class GrpoService:
                         AgentConfig(
                             model=model_name,
                             provider="unsloth",
-                            reasoning_effort=request.model_selection.reasoning_effort,
                         )
                     ),
                 },
@@ -136,12 +135,13 @@ class GrpoService:
         status, error = "completed", None
         current, recorder = None, None
         try:
+            sampling = await self.client.inference_defaults()
             await self.client.unload_studio(request.model_selection.model_name)
             if self.stopped.is_set():
                 status = "stopped"
                 return
             prepared = await self.client.prepare(
-                request.model_selection.model_name, session_id
+                request.model_selection.model_name, session_id, sampling
             )
             if prepared.get("session_id") != session_id:
                 raise CaptureUnavailable(

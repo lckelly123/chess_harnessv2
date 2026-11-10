@@ -1,10 +1,11 @@
 # Fixed-advantage training
 
-`models/GRPO_trainer.py` updates an existing QLoRA adapter with supplied
+`models/GRPO_trainer.py` updates an existing QLoRA adapter with fixed per-call
 advantages and a clipped token probability-ratio loss. It uses Unsloth for model
-loading and gradient checkpointing. There is no reward function, group
-normalization, reference model, critic, KL term, response generation, or
-automatic deduplication in this script.
+loading and gradient checkpointing. `models/GRPO_rewards.py` supplies advantages
+from batch-relative CP loss when the dataset has no A values. Supplied inline A
+or an explicit `--advantages` file still takes precedence. There is no reference
+model, critic, KL term, response generation, or automatic deduplication.
 
 This is the requested offline experiment, rather than standard online GRPO.
 The old policy stays fixed in the recorded log probabilities. The current
@@ -13,15 +14,61 @@ normally matches the collection checkpoint; `--allow-adapter-mismatch` allows
 an intentional later starting checkpoint without changing the old probabilities.
 The tokenizer and pinned base model must still match.
 
+## Terminal prompts
+
+Launch the file with the Unsloth Studio Python environment:
+
+```powershell
+& "$env:USERPROFILE\.unsloth\studio\unsloth_studio\Scripts\python.exe" `
+  .\models\GRPO_trainer.py
+```
+
+Without arguments it selects the prepared
+`models/training_data/RL_testing/middlegame_move20_v2/training_setv2_grpo.jsonl`
+(relative to the script, independent of the working directory) and reads the
+starting adapter path from the matching capture metadata. It asks:
+
+```text
+New policy name:
+Epochs [1]:
+Clipping [0.2]:
+No. calls gradient accum [8]:
+```
+
+Enter a new name; Enter accepts each numeric default. Invalid names/settings
+are prompted again. The result is saved to `<starting adapter's parent>/<new
+policy name>`, a separate directory beside the old adapter in Studio's outputs
+folder. Existing directories cannot be overwritten. Training starts after
+these inputs pass validation. Ctrl+C or end-of-input cancels the prompts.
+
+`--adapter-path` and `--data` override the starting checkpoint and dataset. For
+unattended use supply `--non-interactive --policy-name NAME` plus any numeric
+settings. An explicit `--output-dir` also skips the prompts, preserving the
+original command-line workflow. `--validate-only` never prompts and does not
+require a new policy name or output directory.
+
+The terminal reports the active example, examples completed out of the current
+epoch, completed weight updates, and saving progress. For example:
+
+```text
+Epoch 1/2 | completed 7/295 examples | processing example 8/295 | weight updates: 0
+Epoch 1/2 | completed 8/295 examples | weight updates: 0 | backpropagation complete; accumulation 8/8
+Epoch 1/2 | completed 8/295 examples | weight updates: 1 | weight update 1 applied; ...
+```
+
 ## Inputs
 
 - `--adapter-path`: local directory containing `adapter_config.json`,
-  `adapter_model.safetensors`, and the captured tokenizer files.
+  `adapter_model.safetensors`, and the captured tokenizer files. Defaults to
+  the path recorded in the data's capture metadata.
 - `--data`: one or more collection directories or JSONL files. Collection
   directories select `trajectory_*.jsonl` files only.
 - `--advantages`: JSONL containing externally calculated A values. This file
   also selects which calls enter training. Omitted calls are excluded.
-- `--output-dir`: a new directory for the updated adapter and training records.
+- `--harness-penalty`: deduction for a harness-rejected call when the CP-loss
+  helper is used; defaults to `2.0`. Does not alter supplied A values.
+- `--policy-name`: new adapter folder name beside the starting adapter, supplied
+  interactively by default. `--output-dir` is an alternative explicit location.
 - Original `capture_config.json` alongside each data file. If preparing or
   relocating one collection's data, supply its original `--capture-config`.
 
@@ -37,7 +84,41 @@ otherwise every generated token, including EOS, is included. Prompt tokens
 never receive loss. Text is retained in source records for inspection but is
 not retokenized or used to reconstruct the training sequence.
 
-## Supplying A
+## Default CP-loss reward helper
+
+When there is no inline A and no `--advantages`, the trainer calls
+`GRPO_rewards.supply_advantages()`. For each collection it reads the original
+`manifest.json` and binds its trajectory numbers to the run IDs in the original
+`trajectory_*.jsonl` files. Keep these files beside the prepared dataset, or
+beside `--capture-config` if the prepared data was relocated.
+
+The helper uses **every trajectory in the collection** to determine the batch
+range, regardless of how many calls each run has or which calls survive
+deduplication. For completed runs, effective loss is the final CP loss; for
+failed runs, it is the worst completed run's CP loss. It then calculates:
+
+```text
+B_run = 1 - 2 * (effective_cp_loss - batch_min) / (batch_max - batch_min)
+A_call = clip(B_run - 2.0 * harness_rejected, -1, 1)
+```
+
+Equal losses give `B_run = 0`. A batch with no completed run or a completed run
+without a finite CP loss fails validation because its engine baseline is
+undefined. Each selected call needs a boolean `harness_rejected` label. No
+reward or token fields in the dataset are rewritten.
+
+The same call's A is applied to all its active generated tokens. There is no
+further centering or normalization inside an epoch or gradient accumulation
+group. With the default penalty of 2, every harness-rejected call clamps to
+`-1`, even in the best run. Accepted calls retain their trajectory score. Supplied A values
+are accepted unchanged; partially populated inline A fields are an error.
+
+The validation console reports the reward source, penalty, range, and counts
+of positive/negative/zero calls. When training is explicitly launched, its
+`training_run.json` records the reward formula, batch scores, source hashes,
+helper hash, and exact `per_call_advantages` used.
+
+## Supplying A from another reward function
 
 Per-call JSONL entries use the recorded `run_id` and `call_index`:
 
@@ -60,12 +141,20 @@ call's selector: the trainer does not infer failure labels or deduplicate.
 Alternatively, add numeric `"A"` directly to every row in a prepared JSONL
 and omit `--advantages`. Any finite numeric A is supported, including zero;
 zero produces no policy gradient. At least one selected A must be nonzero.
-No centering, scaling, clipping, or sign conversion is applied to A itself.
+No centering, scaling, clipping, or sign conversion is applied to supplied A.
 
 ## Validate without training
 
-Run from the project root. Replace the advantages filename with your own file.
-The example deliberately includes `--validate-only`:
+For the prepared v2 dataset and default helper, this is sufficient:
+
+```powershell
+& "$env:USERPROFILE\.unsloth\studio\unsloth_studio\Scripts\python.exe" `
+  .\models\GRPO_trainer.py --validate-only
+```
+
+For a different collection, run from the project root and replace the
+advantages filename with your own file. This example also includes
+`--validate-only`:
 
 ```powershell
 & "$env:USERPROFILE\.unsloth\studio\unsloth_studio\Scripts\python.exe" `
@@ -97,6 +186,15 @@ active generated tokens in each call, then equally across calls in the
 gradient-accumulation group. The final partial group uses its actual size.
 Old probabilities are detached constants. There is no prompt-token loss and
 no optimizer state inherited from SFT.
+
+Gradient accumulation controls when **weights are updated**, not when
+backpropagation is performed. With accumulation 8, each call runs a forward
+pass and backward pass; its gradients are added to the running sum. After
+eight calls, the optimizer applies their averaged gradient and clears it.
+The calls within a group all see the same current weights. For 295 nonzero-A
+calls, one epoch has 295 backward passes and 37 weight updates (the final
+update combines seven calls). A=0 examples are counted as processed but skip
+forward/backward work; an entirely zero-A group makes no optimizer update.
 
 The capture worker also saved `sampling_logprobs` after temperature, top-k and
 top-p. This trainer deliberately uses **raw policy values on both sides** of

@@ -8,6 +8,8 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from openai import AsyncOpenAI
+from positional_testing.models import CreatePositionQueueRequest
+from positional_testing.queue import PositionQueueManager
 
 import app.routes as routes
 import harness.model as models
@@ -18,8 +20,6 @@ from harness.agent_player_2.nodes import SynthesisNodes
 from harness.agent_player_2.state import initial_state
 from harness.contracts import HarnessError
 from harness.model import ModelResolutionError, UnslothModel
-from positional_testing.models import CreatePositionQueueRequest
-from positional_testing.queue import PositionQueueManager
 
 CHECKPOINT = "Qwen_Qwen3-14B__project-test_train_set_1_1791485578"
 
@@ -183,6 +183,9 @@ def test_agent_2_uses_unsloth_wire_request_and_parses_reasoning_and_tools(
             assert event["reasoning"] == "Inspect queen safety first."
             assert requests[0]["model"] == CHECKPOINT
             assert requests[0]["input"][0]["role"] == "developer"
+            assert "reasoning" not in requests[0]
+            assert "enable_thinking" not in requests[0]
+            assert "temperature" not in requests[0]
             assert "test-unsloth-secret" not in json.dumps(requests)
         finally:
             await client.aclose()

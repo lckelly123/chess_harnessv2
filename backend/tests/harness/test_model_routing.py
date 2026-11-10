@@ -15,10 +15,20 @@ from app.models import ModelSelection
 from harness.model import ModelResolutionError
 
 
+def test_legacy_medium_selection_is_discarded_on_load_and_save():
+    selection = ModelSelection.model_validate(
+        {"modelId": "unsloth", "modelName": "adapter", "reasoningEffort": "medium"}
+    )
+    assert selection.model_dump(by_alias=True) == {
+        "modelId": "unsloth",
+        "modelName": "adapter",
+    }
+
+
 @pytest.mark.parametrize(
     "harness_id", [BASELINE_ID, AGENT_PLAYER_1_ID, AGENT_PLAYER_2_ID, AGENT_PLAYER_3_ID]
 )
-def test_gpt_selection_bypasses_lmstudio_and_uses_medium(
+def test_gpt_selection_bypasses_lmstudio_and_uses_provider_default(
     harness_id, monkeypatch, request_position
 ):
     monkeypatch.setenv("LMSTUDIO_REASONING_EFFORT", "high")
@@ -41,7 +51,7 @@ def test_gpt_selection_bypasses_lmstudio_and_uses_medium(
     )
     assert name == player.config.model == GPT_TERRA_MODEL
     assert player.config.provider == "openai"
-    assert player.config.reasoning_effort == "medium"
+    assert player.config.reasoning_effort is None
     assert player.config.max_output_tokens == 8000
     if harness_id == AGENT_PLAYER_2_ID:
         assert player.config.max_response_retries == 10
@@ -130,7 +140,7 @@ def test_match_resolves_one_configuration_for_both_players(model_id, monkeypatch
         assert white.config.max_output_tokens == 4000
         assert black.config.max_output_tokens == 2000
         assert black.config.max_response_retries == 10
-    assert black.config.reasoning_effort == ("low" if model_id is None else "medium")
+    assert black.config.reasoning_effort == (None if model_id == "gpt-terra" else "low")
 
 
 def test_gpt_output_limits_can_be_configured(monkeypatch):

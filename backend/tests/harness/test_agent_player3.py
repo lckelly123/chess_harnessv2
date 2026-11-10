@@ -113,7 +113,7 @@ def test_native_config_defaults_to_terra_and_preserves_model_override(
         monkeypatch.setenv("OPENAI_MODEL", override)
     config = AgentConfig.from_env()
     assert config.model == (override or "gpt-5.6-terra")
-    assert config.reasoning_effort == "medium"
+    assert config.reasoning_effort is None
     assert config.retry_reasoning_effort == "none"
 
 
@@ -229,7 +229,7 @@ def test_truncated_response_never_executes_its_complete_looking_call(request_pos
     assert "No tested lines yet" in model.calls[1]["dynamic_input"]
     assert model.calls[1]["native_turn"].history == []
     assert model.calls[1]["reasoning_effort"] == "none"
-    assert model.calls[2]["reasoning_effort"] == "medium"
+    assert model.calls[2]["reasoning_effort"] is None
 
 
 def test_invalid_batch_returns_native_error_before_any_action(request_position):
@@ -260,7 +260,7 @@ def test_rejected_batch_rolls_back_notes_annotations_and_success_results(
     state, model = run_script(request_position, [script[0], rejected, *script[1:]])
     followup = model.calls[2]
     assert followup["forced_retry"] is False
-    assert followup["reasoning_effort"] == "medium"
+    assert followup["reasoning_effort"] is None
     assert "FALSE" not in followup["dynamic_input"]
     assert "Annotation: None yet" in followup["dynamic_input"]
     call_id, error = function_results(followup["native_turn"].history)[-1]
@@ -285,9 +285,9 @@ def test_rejection_after_protocol_retry_resumes_normal_reasoning(request_positio
         [{"status": "completed", "output": []}, rejected, *verified_responses()],
     )
     assert [call["reasoning_effort"] for call in model.calls[:3]] == [
-        "medium",
+        None,
         "none",
-        "medium",
+        None,
     ]
     assert model.calls[2]["forced_retry"] is False
     assert "FALSE" not in model.calls[2]["dynamic_input"]
@@ -425,7 +425,7 @@ def test_openai_http_roundtrip_uses_native_schema_outputs_and_reasoning(
         assert request["tool_choice"] == {"type": "function", "name": "agent_step"}
         assert request["parallel_tool_calls"] is False
         assert request["include"] == ["reasoning.encrypted_content"]
-        assert request["reasoning"] == {"effort": "medium"}
+        assert "reasoning" not in request
         assert request["store"] is False
         assert "previous_response_id" not in request
         assert request["input"][0]["role"] == "developer"

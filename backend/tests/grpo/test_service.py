@@ -7,13 +7,14 @@ from types import SimpleNamespace
 
 import httpx2 as httpx
 import pytest
-
-from app.matches.catalog import AGENT_PLAYER_2_ID, HarnessCatalog
+from grpo import client as client_module
 from grpo import service as service_module
 from grpo.client import CaptureClient, CaptureUnavailable
 from grpo.routes import StartCollection
 from grpo.service import CollectionConflict, GrpoService
 from grpo.storage import CollectionStore
+
+from app.matches.catalog import AGENT_PLAYER_2_ID, HarnessCatalog
 from harness.recording import current_recorder
 
 MODEL = "Qwen_Qwen3-14B__project-true_trial_v1.2_1792812112"
@@ -43,6 +44,75 @@ def read_calls(store, name="collection", trajectory=1):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+@pytest.mark.parametrize("unsupported", [False, True])
+def test_studio_defaults_are_resolved_and_forwarded_without_capture_fallback(
+    monkeypatch, unsupported
+):
+    # Deliberately differ from today's defaults to catch hardcoded replacements.
+    sampling = {
+        "temperature": 0.8,
+        "top_p": 0.9,
+        "top_k": 35,
+        "min_p": 0.02,
+        "repetition_penalty": 1.1,
+        "enable_thinking": None,
+    }
+    properties = {
+        name: {"default": value}
+        for name, value in {
+            **sampling,
+            "presence_penalty": 1 if unsupported else 0,
+            "frequency_penalty": 0,
+            "stop": None,
+            "logit_bias": None,
+            "reasoning_effort": None,
+        }.items()
+    }
+    requests = []
+    monkeypatch.setattr(
+        client_module, "unsloth_connection", lambda: ("http://studio/v1", "fixture")
+    )
+
+    def transport(request):
+        requests.append(request)
+        if request.url.path == "/openapi.json":
+            return httpx.Response(
+                200,
+                json={
+                    "components": {
+                        "schemas": {"ChatCompletionRequest": {"properties": properties}}
+                    }
+                },
+            )
+        return httpx.Response(200, json={"session_id": "s"})
+
+    async def scenario():
+        client = CaptureClient.__new__(CaptureClient)
+        client.base_url = "http://capture"
+        client.headers = lambda: {"Authorization": "Bearer fixture"}
+        client.http = httpx.AsyncClient(transport=httpx.MockTransport(transport))
+        try:
+            if unsupported:
+                with pytest.raises(
+                    CaptureUnavailable, match="default inference settings"
+                ):
+                    await client.inference_defaults()
+                assert len(requests) == 1  # No model load or capture attempted.
+            else:
+                resolved = await client.inference_defaults()
+                assert resolved == sampling
+                await client.prepare(MODEL, "s", resolved)
+                body = json.loads(requests[-1].content)
+                assert body["sampling"] == sampling
+                assert body["sampling_source"] == (
+                    "unsloth_studio_openapi_chat_completion_defaults"
+                )
+        finally:
+            await client.close()
+
+    asyncio.run(scenario())
+
+
 class CaptureFixture:
     def __init__(self, *, block_at=None, corrupt_at=None, wrong_session=False):
         self.block_at = block_at
@@ -62,10 +132,16 @@ class CaptureFixture:
     async def health(self):
         return {"ready": True, "busy": False}
 
+    async def inference_defaults(self):
+        self.events.append(("defaults", MODEL))
+        return {"enable_thinking": None, "min_p": 0.01}
+
     async def unload_studio(self, model_name):
         self.events.append(("unload", model_name))
 
-    async def prepare(self, model_name, session_id):
+    async def prepare(self, model_name, session_id, sampling):
+        assert sampling["enable_thinking"] is None
+        assert sampling["min_p"] == 0.01
         self.prepared.append((model_name, session_id))
         self.events.append(("prepare", model_name))
         return {
@@ -77,6 +153,7 @@ class CaptureFixture:
         }
 
     async def complete(self, session_id, provider_request, seed, timeout_seconds):
+        assert "reasoning" not in provider_request
         self.calls.append((session_id, copy.deepcopy(provider_request), seed))
         call = len(self.calls)
         self.inflight += 1
@@ -269,7 +346,11 @@ def test_ten_fresh_sequential_attempts_save_incrementally(collection_factory):
         assert all(t["rejectedModelCalls"] == 1 for t in group["trajectories"])
         assert all(len(read_calls(store, trajectory=i)) == 2 for i in range(1, 11))
 
-        assert worker.events == [("unload", MODEL), ("prepare", MODEL)]
+        assert worker.events == [
+            ("defaults", MODEL),
+            ("unload", MODEL),
+            ("prepare", MODEL),
+        ]
         assert worker.prepared == [(MODEL, service.session_id)]
         assert {call[0] for call in worker.calls} == {service.session_id}
         assert {call[1]["model"] for call in worker.calls} == {MODEL}
@@ -414,7 +495,7 @@ def test_wrong_prepared_policy_session_is_released_without_generation(
 
 def test_failed_prepare_still_releases_and_preserves_manifest(collection_factory):
     class CannotPrepare(CaptureFixture):
-        async def prepare(self, model_name, session_id):
+        async def prepare(self, model_name, session_id, sampling):
             self.prepared.append((model_name, session_id))
             raise CaptureUnavailable("Insufficient VRAM for this checkpoint.")
 

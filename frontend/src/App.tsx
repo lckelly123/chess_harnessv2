@@ -38,7 +38,6 @@ export default function App() {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [modelSelection, setModelSelection] = useState<ModelSelection>({
     modelId: "qwen",
-    reasoningEffort: "medium",
   });
   const [positionalRunning, setPositionalRunning] = useState(false);
   const [displayPly, setDisplayPly] = useState(0);

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class AgentConfig:
     model: str
-    reasoning_effort: str = "medium"
+    reasoning_effort: str | None = None
     retry_reasoning_effort: str = "none"
     max_output_tokens: int = 8000
     retry_max_output_tokens: int = 2000
@@ -40,7 +40,7 @@ class AgentConfig:
     def from_env(cls):
         return cls(
             model=os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
-            reasoning_effort="medium",
+            reasoning_effort=None,
             retry_reasoning_effort="none",
             max_output_tokens=int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "8000")),
             retry_max_output_tokens=int(
